@@ -40,6 +40,61 @@ set.seed(42)
 
 ```
 
+# Why do simulation studies?
+
+Do these two groups differ from one another? Does the intervention group have a lower average depression score than the control group?
+
+These plots contain data that is simulated but realistic for a hypothetical RCT comparing a psychotherapeutic intervention versus waiting list control. The (hypothetical) outcome variable is a popular measure of depression, the Beck Depression Inventory II.
+
+```{r echo=FALSE}
+
+rct_simulation_plot <- function(n_per_group, m1, m2, sd1, sd2){
+  require(ggplot2)
+  
+  # simulate data
+  simulated_scores <- data_frame(score = c(rnorm(n = n_per_group, mean = m1, sd = sd1),
+                                           rnorm(n = n_per_group, mean = m2, sd = sd2)),
+                                 condition = c(rep("Control", n_per_group), 
+                                               rep("Intervention", n_per_group)))
+  
+  # plot
+  p <- 
+    ggplot(data.frame(simulated_scores), aes(score)) + 
+    geom_histogram(binwidth = 1, boundary = -0.5, position = "identity", fill = "darkcyan") + 
+    scale_x_continuous(breaks = breaks_pretty(), 
+                       name = "Depression score (BDI-II)") + 
+    scale_fill_viridis_d(begin = 0.3, end = 0.7, option = "G") +
+    ylab("Count") + 
+    theme_linedraw() + 
+    theme(panel.grid.minor = element_blank(), 
+          text = element_text(family = "Courier New")) +
+    facet_wrap(~ condition, ncol = 1)
+  
+  return(p)
+}
+
+rct_simulation_plot(n_per_group = 40, m1 = 33, m2 = 29, sd1 = 10, sd2 = 12)
+
+```
+
+Statistical inference is about making inferences about populations from limited samples drawn from those populations. 
+
+Generally speaking, psychology studies are less interested in the specific participants that we study, and more interested in making generalisations about the populations they are drawn from. E.g., would people in general, other than these participants we studied here, benefit from this therapy?
+
+The previous plots sampled 40 participants per condition from a true population. Imagine we were able to see data from the whole population - which we never can in real life. 
+
+```{r echo=FALSE}
+
+rct_simulation_plot(n_per_group = 1000000, m1 = 33, m2 = 29, sd1 = 10, sd2 = 12)
+
+```
+
+It's easier to see from this plot that the therapy does indeed work. The values are also realistic: the means, SDs, and effect sizes are reasonable for BDI-II scores for an effective therapy. 
+
+[TODO] say more about the purpose of simulation, to provide ground truth. The relation and direction between sample and population in evaluating results (sample -> population) vs in simulations (population -> sample). The utility of knowing what the real answer is.
+
+[TODO] we are taught "violating statistical assumptions is bad", but how bad? in what contexts, and why? What are the specific consequences of doing so? Simulation lets you answer this. This course will teach you to run simulation studies, including the concepts and the implementations in R.
+
 # Randum number generators
 
 ## Sampling from uniform distributions
@@ -61,18 +116,9 @@ runif(n = 1,
 
 # Random number generators are not truly random
 
-Randomness is impossible to achieve. All "random" number generators are actually pseudo-random number generators (PRNGs). calculater scientists and mathematicians spend lots of time trying to increase the randomness of our random number generators, because any degree of predictability adds bias to any models built on them.
+Randomness is impossible to achieve. All "random" number generators are actually pseudo-random number generators (PRNGs). Computer scientists and mathematicians spend lots of time trying to increase the randomness of our random number generators, because any degree of predictability adds bias to any models built on them.
 
 You don't need to understand how PRNGs work, but you do need to know that the these "random" numbers can be predictably reproduced. The 'seed' value from which a PRNG starts can be set to control which random numbers are generated. 
-
-```{r}
-
-runif(n = 1, 
-      min = 1,
-      max = 10) |>
-  round_half_up(0)
-
-```
 
 ```{r}
 
@@ -93,7 +139,7 @@ runif(n = 1,
 
 ```
 
-Note that if you run the function a second time without resetting to a known seed, the second value will be different to the first one. Because 
+Note that if you run the function a second time without resetting to a known seed, the second value will be different to the first one.  
 
 ```{r}
 
@@ -170,29 +216,13 @@ Parameter recovery is at the heart of (this type of) simulation studies. It is t
 
 Simulation studies let us do trial and error learning in a way that we can't with our own one-shot analyses of our own data.
 
-# Plotting the normal distribution 
+## Plotting the normal distribution 
 
 Summary statistics like `mean()` and `sd()` allow us to check that we have recovered those population parameters. We still need to examine the distribution of the data - its shape - to ensure that it is indeed normal. It is also just generally useful to be able to plot distribution of simulated data. So, I have created some helper functions that allow you to make these plots in just a line or two of code.
 
-## Base R
+## Basic ggplot
 
-Yuck, non-tidyverse. You can do it, but only if you want to offend my eyes.
-
-```{r}
-
-simulated_scores <- 
-  rnorm(n = 1000, # sample n
-        mean = 0, # population mean (μ or mu)
-        sd = 1) # population sd (σ or sigma)
-
-simulated_scores |>
-  hist()
-
-```
-
-## ggplot
-
-Getting better, but still a bit rough looking.
+Ok, but a little ugly. Making it prettier would mean lots more lines of code.
 
 ```{r}
 
@@ -208,65 +238,9 @@ ggplot(dat, aes(x = simulated_scores)) +
 
 ```
 
-## simulateR's helper functions
+## simulateR::rnorm_histogram()
 
-The simulateR R package is in very early development. It contains a number of functions that let you pass data to a `ggplot()` function call that has several adjustments made to its theme, labels, etc.
-
-Just like a normal package, the overall package and its component functions have help menus that you can use to understand what arguments they receive, what they return, and for working examples.
-
-```{r}
-
-?simulateR
-?vector_to_histogram
-?vector_to_histogram_with_summary_statistics
-?rnorm_histogram
-
-```
-
-### vector_to_histogram()
-
-The simplest version lets you plot any distribution.
-
-Data from normal distribution:
-
-```{r}
-
-rnorm(n = 1000000, # sample n
-      mean = 0, # population mean (μ or mu)
-      sd = 1) |> # population sd (σ or sigma)
-  vector_to_histogram(xmin = -5, xmax = +5)
-
-```
-
-Data from uniform distribution:
-
-```{r}
-
-runif(n = 1000000, # sample n
-      min = -5, # min value
-      max = +5) |> # max value
-  vector_to_histogram(xmin = -5, xmax = +5, fill = "darkcyan")
-
-```
-
-### vector_to_histogram_with_summary_statistics()
-
-This function also lets you pass data from any distribution to it, and adds the sample mean and sample SD to the plot - even when those statistics are not appropriate to that distribution (e.g., the mean of a uniform distribution is not meaningful; the mean of a Cauchy distribution does not exist).
-
-```{r}
-
-rnorm(n = 1000000, # sample n
-      mean = 0, # population mean (μ or mu)
-      sd = 1) |> # population sd (σ or sigma)
-  vector_to_histogram_with_summary_statistics(xmin = -5, xmax = +5)
-
-```
-
-### rnorm_histogram()
-
-This function includes the data generation inside the function itself rather than passing a vector of (simulated) data to it.
-
-It has the advantage of adding summaries of the means & SDs for both the sample and the population. It is, however, limited to normal distributions.
+The simulateR R package is in very early development. Its `rnorm_histogram()` function does both data generation and plotting for you. It plots not only the sample summary statistics, but also the parameters used to generate the data. 
 
 ```{r}
 
@@ -276,9 +250,9 @@ rnorm_histogram(n = 1000000,
 
 ```
 
-# Varying parameters
+# Understanding $\mu$, $\sigma$, and n
 
-In order to really understand these parameters ($\mu$, $\sigma$, and n), it useful to vary them. 
+In order to really understand `rnorm()`'s parameters ($\mu$, $\sigma$, and n) it useful to vary them. 
 
 ## Varying the population mean ($\mu$)
 
@@ -408,15 +382,15 @@ simulated_scores <-
           sd = sigma) 
 
 mean(simulated_scores) |> round_half_up(2)
-sd(simulated_scores) |> round_half_up(2)
+#sd(simulated_scores) |> round_half_up(2)
 
 ```
 
-If you're reading this in the .Rmd file rather than as a .html, click the run button on the previous chunk a few times to re-run the code. Notice that the sample mean and SD are different each time. Each one is somewhat close to the population value, but not exact. Each time you click run, you are creating a new "iteration" of this very small simulation: the same code, specifying the same population parameters are generating data, and that data is being analyzed in some way (in this case: by calculating a mean and SD). 
+If you're reading this in the .Rmd file rather than as a .html, click the run button on the previous chunk a few times to re-run the code. Notice that the sample mean and SD are different each time. Each one is somewhat close to the population value, but not exact. 
+
+Each time you click run, you are creating a new "iteration" of this very small simulation: the same code, specifying the same population parameters are generating data, and that data is being analyzed in some way (in this case: by calculating a mean and SD). 
 
 A full-blown simulation study would typically include thousands of iterations, and conclusions would be made by summarizing across those thousands of iterations. 
-
-If I want to generate 
 
 # Multiple iterations of a given simulation
 
@@ -536,6 +510,7 @@ results
 What if we want to assign every element to 7, and we don't want to repeat ourselves? We can use a for loop.
 
 For the `i`th element in the sequence 1:n_iterations (i.e., 1, 2, 3, 4, 5, 6, 7, 8, 9, 10), assign the `i`th element of the results vector to be 7. 
+
 ```{r}
 
 for(i in 1:n_iterations){
@@ -593,11 +568,15 @@ mean(results) |> round_half_up(2)
 
 ```
 
-## Testing yourself: Why doesn't this work?
+## Testing yourself: Why doesn't this accomplish the goal of saving all iterations to the vector?
 
-To check your own understanding, see if you can guess what output this code creates and why. Try to explain exactly what value it returns. Why doesn't it achieve what the above code does? After all, it looks simpler. Indeed, it would be great if it could accomplish what the previous code does (but it can't). 
+To check your own understanding, see if you can guess what output this code creates and why. 
 
-```{r}
+Try to predict what value it returns, and why.
+
+Why doesn't it achieve what the above code does, and what you need it to? After all, it looks simpler. Indeed, it would be great if it could accomplish what the previous code does (but it can't). 
+
+```{r include=FALSE}
 
 for(i in 1:n_iterations){
   # generate data sampled from a normal population using rnorm
@@ -620,7 +599,7 @@ results
 
 Each iteration of a simulation is often intended to correspond with a semi-realistic real life study or experiment. Real life studies usually don't have a million participants, maybe they have more like 100. To know that `rnorm` is generating data from the population parameters we tell it to, even in smaller and more realistic sample sizes, we can check the long run of studies. 
 
-Each individual study will have more noise and random variation around it, as we saw in the histograms above. But the long run of studies should recover the population parameters. Each iteration might be relatively small (n_samples = `r n_samples`), but we can run a large number of iterations to average over (n_iterations = 1000).
+Each individual study will have noise and random variation around it, as we saw in the histograms above with smaller sample sizes. But the long run of studies should recover the population parameters. Each iteration might be relatively small (n_samples = `r n_samples`), but we can run a large number of iterations to average over (n_iterations = 1000).
 
 ```{r}
 
@@ -724,7 +703,7 @@ mean(results_sds) |> round_half_up(2) == sigma
 
 ```
 
-## Understanding this simulation in terms of frequentist statistics and vice-versa
+# Understanding this simulation in terms of frequentist statistics and vice-versa
 
 Whether you realized it until now or not, this stimulation follows and indeed formalises the same logic as frequenist statistics:
 
@@ -733,6 +712,11 @@ It imagines that smaller, finite studies are run. Each of them have a realistic 
 But, in the long run of studies - either a long run of real, actual replication studies (if unbiased etc), or an arbitrarily long run of simulation iterations - we can see that the population values are being uncovered (or recovered, in the case of the simulations).
 
 We have used this simulation to prove that the (incredibly useful) rnorm function functions correctly, and generates normally distributed data following known population means ($\mu$) and SDs ($\sigma$). In the coming weeks, we will extend on this logic and use simulations to test many different things, from the assumptions of our analyses, to statistical power, and the effect of publication bias.
+
+# [TODO] Assignment ideas
+
+- Construct a for loop
+- Construct a plot
 
 # Session info
 
