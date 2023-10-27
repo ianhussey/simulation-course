@@ -12,7 +12,7 @@
 <meta name="author" content="Template by Ian Hussey, additions by [student’s name]" />
 
 
-<title>Simulation studies</title>
+<title>Learning simulation studies</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -1660,10 +1660,10 @@ border-radius: 0px;
 
 
 
-<h1 class="title toc-ignore">Simulation studies</h1>
+<h1 class="title toc-ignore">Learning simulation studies</h1>
 <h4 class="author">Template by Ian Hussey, additions by [student’s
 name]</h4>
-<h4 class="date">26 October, 2023</h4>
+<h4 class="date">27 October, 2023</h4>
 
 </div>
 
@@ -1678,8 +1678,8 @@ name]</h4>
 <span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a><span class="fu">library</span>(janitor)</span>
 <span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a><span class="co"># install.packages(&quot;devtools&quot;)</span></span>
 <span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a><span class="co"># library(devtools)</span></span>
-<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a><span class="co"># install_github(&quot;ianhussey/simulateR&quot;)</span></span>
-<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a><span class="fu">library</span>(simulateR)</span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a><span class="co"># devtools::install_github(&quot;ianhussey/simulateR&quot;)</span></span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a><span class="fu">library</span>(simulateR) <span class="co"># available from github - uncomment the above lines to install</span></span>
 <span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a></span>
 <span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a><span class="co"># disable scientific notation</span></span>
 <span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a><span class="fu">options</span>(<span class="at">scipen=</span><span class="dv">999</span>)</span>
@@ -1762,18 +1762,23 @@ knowable, whether its run once or in multiple runs.</p>
 <span id="cb14-6"><a href="#cb14-6" tabindex="-1"></a>      <span class="at">max =</span> <span class="dv">10</span>) <span class="sc">|&gt;</span></span>
 <span id="cb14-7"><a href="#cb14-7" tabindex="-1"></a>  <span class="fu">round_half_up</span>(<span class="dv">0</span>)</span></code></pre></div>
 <pre><code>## [1] 5 9</code></pre>
-<div id="rnorm" class="section level2">
-<h2>rnorm()</h2>
+<div id="sampling-from-normal-distributions" class="section level2">
+<h2>Sampling from normal distributions</h2>
 <p><code>rnorm()</code> is a random generation function (the “r” part)
 for normal distributions (the “norm” part).</p>
-<p>It’s like magic, because it allows you to create data that follows
-the assumptions of our most common statistical analyses. The difference
-between simulated data, e.g., from <code>rnorm()</code>, and real data
-from participants, is that we can know what the real population value -
-the data generating signals - are in simulated data. Whereas with real
-participant data we don’t ever know this for sure. We use real data to
-make inferences - best guesses - about (unobserved, unknowable) true
-populations.</p>
+<p>Note that normal distributions are sometimes referred to as Gaussian
+distributions. This can be useful as it can rid us of the impression
+that Gaussian distributions are typical/standard/default, or that other
+distributions are abnormal in some way. However, “normal” is more common
+so we’ll use it.</p>
+<p><code>rnorm()</code> is like magic, because it allows you to create
+data that follows the assumptions of our most common statistical
+analyses. The difference between simulated data, e.g., from
+<code>rnorm()</code>, and real data from participants, is that we can
+know what the real population value - the data generating signals - are
+in simulated data. Whereas with real participant data we don’t ever know
+this for sure. We use real data to make inferences - best guesses -
+about (unobserved, unknowable) true populations.</p>
 <p>The below code generates data from a normal distribution, where the
 population mean (usually notated as <span class="math inline">\(\mu\)</span>) is 7.52 and the population standard
 deviation (usually noted as <span class="math inline">\(\sigma\)</span>)
@@ -1801,9 +1806,9 @@ is 3.18. Let’s sample 100 simulated “participants”.</p>
 </div>
 <div id="parameter-recovery" class="section level2">
 <h2>Parameter recovery</h2>
-<p>But … how do we know that rnorm() actually does that? How do we know
-it generates data with the values we tell it to, and from a normal
-distribution?</p>
+<p>But … how do we know that rnorm() actually does what it claims to?
+How do we know it generates data with the parameters we tell it to, and
+from a normal distribution?</p>
 <p>-&gt; By checking!</p>
 <p>Generate a <em>very large</em> sample of participants from a known
 population (i.e., specified by the arguments given to

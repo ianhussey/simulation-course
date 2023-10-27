@@ -1,5 +1,5 @@
 ---
-title: "Simulation studies"
+title: "Learning simulation studies"
 author: "Template by Ian Hussey, additions by [student's name]"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
@@ -30,8 +30,8 @@ library(kableExtra)
 library(janitor)
 # install.packages("devtools")
 # library(devtools)
-# install_github("ianhussey/simulateR")
-library(simulateR)
+# devtools::install_github("ianhussey/simulateR")
+library(simulateR) # available from github - uncomment the above lines to install
 
 # disable scientific notation
 options(scipen=999)
@@ -126,11 +126,13 @@ runif(n = 2, # generate two numbers rather than one
 
 ```
 
-## rnorm()
+## Sampling from normal distributions
 
-`rnorm()` is a random generation function (the "r" part) for normal distributions (the "norm" part).
+`rnorm()` is a random generation function (the "r" part) for normal distributions (the "norm" part). 
 
-It's like magic, because it allows you to create data that follows the assumptions of our most common statistical analyses. The difference between simulated data, e.g., from `rnorm()`, and real data from participants, is that we can know what the real population value - the data generating signals - are in simulated data. Whereas with real participant data we don't ever know this for sure. We use real data to make inferences - best guesses - about (unobserved, unknowable) true populations.
+Note that normal distributions are sometimes referred to as Gaussian distributions. This can be useful as it can rid us of the impression that Gaussian distributions are typical/standard/default, or that other distributions are abnormal in some way. However, "normal" is more common so we'll use it. 
+
+`rnorm()` is like magic, because it allows you to create data that follows the assumptions of our most common statistical analyses. The difference between simulated data, e.g., from `rnorm()`, and real data from participants, is that we can know what the real population value - the data generating signals - are in simulated data. Whereas with real participant data we don't ever know this for sure. We use real data to make inferences - best guesses - about (unobserved, unknowable) true populations.
 
 The below code generates data from a normal distribution, where the population mean (usually notated as $\mu$) is 7.52 and the population standard deviation (usually noted as $\sigma$) is 3.18. Let's sample 100 simulated "participants".
 
@@ -144,7 +146,7 @@ rnorm(n = 100,
 
 ## Parameter recovery
 
-But ... how do we know that rnorm() actually does that? How do we know it generates data with the values we tell it to, and from a normal distribution? 
+But ... how do we know that rnorm() actually does what it claims to? How do we know it generates data with the parameters we tell it to, and from a normal distribution? 
 
 -> By checking!
 
@@ -152,8 +154,7 @@ Generate a *very large* sample of participants from a known population (i.e., sp
 
 This ability to compare a known ground truth with what is observed in the simulated data is called **parameter recovery**. 
 
-For example, the following code defines a population mean ($\mu$ = 7.52) and population SD ($\sigma$ =
-3.18), simulates 1 million participants from this population, and the calculates the mean and sd in the sample. In such a large sample, the sample summary statistics should be almost equal to the population that it was drawn from.
+For example, the following code defines a population mean ($\mu$ = 7.52) and population SD ($\sigma$ = 3.18), simulates 1 million participants from this population, and the calculates the mean and sd in the sample. In such a large sample, the sample summary statistics should be almost equal to the population that it was drawn from.
 
 ```{r}
 
@@ -227,15 +228,21 @@ Just like a normal package, the overall package and its component functions have
 
 The simplest version lets you plot any distribution.
 
+Data from normal distribution:
+
 ```{r}
 
-# data from normal distribution
 rnorm(n = 1000000, # sample n
       mean = 0, # population mean (μ or mu)
       sd = 1) |> # population sd (σ or sigma)
   vector_to_histogram(xmin = -5, xmax = +5)
 
-# data from uniform distribution
+```
+
+Data from uniform distribution:
+
+```{r}
+
 runif(n = 1000000, # sample n
       min = -5, # min value
       max = +5) |> # max value
