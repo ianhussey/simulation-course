@@ -1,5 +1,6 @@
 ---
 title: "Learning simulation studies"
+subtitle: "Lesson 1"
 author: "Template by Ian Hussey, additions by [student's name]"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
@@ -16,11 +17,12 @@ output:
 knitr::opts_chunk$set(message = FALSE, 
                       warning = FALSE)
 
+# disable scientific notation
+options(scipen=999)
+
 ```
 
-# Dependencies & settings
-
-```{r}
+```{r dependencies and settings}
 
 # dependencies
 library(tidyverse)
@@ -32,9 +34,6 @@ library(janitor)
 # library(devtools)
 # devtools::install_github("ianhussey/simulateR")
 library(simulateR) # available from github - uncomment the above lines to install
-
-# disable scientific notation
-options(scipen=999)
 
 # set seed
 set.seed(42)
@@ -725,7 +724,7 @@ mean(results_sds) |> round_half_up(2) == sigma
 
 ```
 
-# Understanding this simulation in terms of frequentist statistics and vice-versa
+## Understanding this simulation in terms of frequentist statistics and vice-versa
 
 Whether you realized it until now or not, this stimulation follows and indeed formalises the same logic as frequenist statistics:
 
