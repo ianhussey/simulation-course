@@ -26,6 +26,7 @@ options(scipen=999)
 
 # dependencies
 library(tidyverse)
+library(purrr)
 library(scales)
 library(knitr)
 library(kableExtra)
@@ -89,7 +90,7 @@ Varying simulation parameters in order to observe results can (a) provide eviden
 
 # Running simulations with different parameters more easily
 
-[sth about instructing the user to run the above multiple times with different inputs, or showing long-hand that examining different parameters values requires you to duplicate the code a lot.]
+**sth about instructing the user to run the above multiple times with different inputs, or showing long-hand that examining different parameters values requires you to duplicate the code a lot.**
 
 In lesson 1, we used a for loop to run be able to easily run an arbitrary number of iterations of a simulation. 
 
@@ -105,21 +106,325 @@ Writing R code involves making frequent use of functions. Functions take inputs,
 
 `for()` is a variable,
 
-We can write our own variables too, when there isn't one that does exactly what we want.
+# Writing functions
 
-simple example
+We can write our own functions too, when there isn't one that does exactly what we want. Functions take "arguments", the variables specified inside the round brackets `()`, and use these in the code inside the curly brackets `{}`, and return whatever is specified by `return()`.
 
-more complex example
-
-convert simulation into a function. maybe need to work more on it returning a data frame rather than vectors first?
-
-make very clear that this process of abstracting and iterating is how you write this stuff. you dont start writing "function()" and just know what youre doing.
+Note that once this code is run, the function appears in your environment. Your environment isn't just for data!
 
 ```{r}
 
+multiply_by_two <- function(x){
+  res <- x*2 # note that "res" is common but not required; its short for result
+  return(res)
+}
 
+multiply_by_two(1)
+multiply_by_two(20)
 
 ```
+
+`return()` does not have to be specified explicitly (in replicate or other functions): if the last line would print something, it returns it. However, implicit behavior is usually more confusing, so try to avoid relying on it.
+
+```{r}
+
+multiply_by_two <- function(x){
+  x*2
+}
+
+multiply_by_two(1)
+multiply_by_two(20)
+
+```
+
+Note that the syntax for functions can differ. I wouldn't advise specfiying it this way without curly brackets, but but know that it can be done.
+
+```{r}
+
+multiply_by_two <- function(x)x*2
+
+multiply_by_two(1)
+multiply_by_two(20)
+
+```
+
+Recently, other syntax for functions was added to R. Again, I wouldn't advise specfiying it this way, but know that it can be done.
+
+```{r}
+
+multiply_by_two <- \(x)x*2
+
+multiply_by_two(1)
+multiply_by_two(20)
+
+```
+
+# Convert our simulation using for loops into a function
+
+Here's the original code to do parameter recovery for the mean of a normal distribution. 
+
+```{r}
+
+set.seed(42)
+
+# new values 
+n_samples <- 100
+n_iterations <- 10000
+mu <- 0.33
+sigma <- 1
+
+# create two new results vectors
+results_means <- numeric(n_iterations)
+results_sds <- numeric(n_iterations)
+
+for(i in 1:n_iterations){
+  # generate data sampled from a normal population using rnorm
+  simulated_scores <- 
+    rnorm(n = n_samples, 
+          mean = mu, 
+          sd = sigma)
+  
+  # compute the mean for this simulation and store it 
+  # in the `i`th element of each results vector
+  results_means[i] <- mean(simulated_scores)
+}
+
+# compute the mean of means
+mean(results_means) |> round_half_up(2)
+# check that the mean of sample means is equal to the population mean (mu)
+mean(results_means) |> round_half_up(2) == mu
+
+```
+
+Let's convert the simulation code into a very simple function which, for now, has no arguments. 
+
+```{r}
+
+set.seed(42)
+
+sim <- function(){
+  # create two new results vectors
+  res <- numeric(10000)
+  
+  for(i in 1:10000){
+    # generate data sampled from a normal population using rnorm
+    dat <- rnorm(n = 100, 
+                 mean = 0.33, 
+                 sd = 1.00)
+    
+    # compute the mean for this simulation and store it 
+    # in the `i`th element of each results vector
+    res[i] <- mean(dat)
+  }
+  return(res)
+}
+
+sim() |> 
+  mean() |> 
+  round_half_up(2)
+
+```
+
+We can make the function more abstract by using arguments
+
+```{r}
+
+set.seed(42)
+
+sim <- function(n_iterations, n_samples, mu, sigma){
+  # create two new results vectors
+  res <- numeric(n_iterations)
+  
+  for(i in 1:n_iterations){
+    # generate data sampled from a normal population using rnorm
+    dat <- rnorm(n = n_samples, 
+                 mean = mu, 
+                 sd = sigma)
+    
+    # compute the mean for this simulation and store it 
+    # in the `i`th element of each results vector
+    res[i] <- mean(dat)
+  }
+  return(res)
+}
+
+sim(n_iterations = 10000,
+    n_samples = 100,
+    mu = 0.33,
+    sigma = 1.00) |> 
+  mean() |> 
+  round_half_up(2)
+
+sim(n_iterations = 10000,
+    n_samples = 100,
+    mu = 0.76,
+    sigma = 1.00) |> 
+  mean() |> 
+  round_half_up(2)
+
+```
+
+# Abstraction
+
+If I was sitting down to write a new simulation from scratch, I would not start by writing a function like in the above chunk. I would start with getting rnorm() to work, then puttting it inside a for loop, and then converting it to a function. When you read someone else's  
+
+**make very clear that this process of abstracting and iterating is how you write this stuff. you dont start writing "function()" and just know what youre doing.**
+
+# Alternatives to for loops
+
+For loops are no the only way to implement iterations.
+
+## (s)apply()
+
+Instead of for loops, you can also use `sapply()`, which is one of multiple `apply()` functions in R. 
+
+```{r}
+
+set.seed(42)
+
+res_sim <- sapply(1:10000, function(i) {
+  dat <- rnorm(n = 100, 
+               mean = 0.33, 
+               sd = 1.00)
+  res <- mean(dat)
+  return(res)
+})
+
+res_sim |> 
+  mean() |> 
+  round_half_up(2)
+
+```
+
+## replicate()
+
+Instead of for loops, you can also use `replicate()`. 
+
+```{r}
+
+set.seed(42)
+
+res_sim <- replicate(10000, {
+  dat <- rnorm(n = 100, 
+               mean = 0.33, 
+               sd = 1.00)
+  res <- mean(dat)
+  return(res)
+})
+
+res_sim |> 
+  mean() |> 
+  round_half_up(2)
+
+```
+
+# Convert `replicate()` code to function
+
+So that it can be run an aribtrary number of times.
+
+First, lets replace the hard-coded parameters with variables.
+
+```{r}
+
+set.seed(42)
+
+n_samples <- 100
+n_iterations <- 10000
+mu <- 0.33
+sigma <- 1
+
+sim1 <- replicate(n_iterations, {
+  dat <- rnorm(n = n_samples, 
+               mean = mu, 
+               sd = sigma)
+  res <- mean(dat)
+  return(res)
+})
+
+sim1 |> mean() |> round_half_up(2)
+
+```
+
+Rewrite as a function. Use default arguments for everything but n_samples.
+
+```{r}
+
+set.seed(42)
+
+simulation_1 <- function(n_samples, n_iterations = 10000, mu = 0.33, sigma = 1.00){
+  
+  iteration_res <- replicate(n_iterations, {
+    dat <- rnorm(n = n_samples, 
+                 mean = mu, 
+                 sd = sigma)
+    res <- mean(dat)
+    return(res)
+  })
+  
+  iteration_res |> mean()
+}
+
+simulation_1(n_samples = 10)
+simulation_1(n_samples = 100)
+
+```
+
+What if we want to abstract even more? E.g., to apply the function to a range of values of n_samples in sequence.
+
+The {purrr} library has a number of different `map` functions that allow you to do this, i.e., to "map" a function onto a range of input values.
+
+```{r}
+
+set.seed(42)
+
+sample_sizes <- c(5, 10, 25, 50, 100, 1000)
+
+map_dbl(sample_sizes, simulation_1) |>
+  round_half_up(digits = 4)
+
+```
+
+Maybe a vector is not the most useful way to store the output. Maybe a data frame would be more useful, in order to analyze and plot results. We can also map within a mutate call:
+
+```{r}
+
+set.seed(42)
+
+sample_sizes <- c(5, 10, 25, 50, 100, 1000)
+
+dat <- 
+  data.frame(sample_size = sample_sizes) |>
+  mutate(mean_mean = map_dbl(sample_size, simulation_1))
+
+dat
+
+```
+
+We could greatly increase the number of conditions studied by just changing the samples_sizes vector:
+
+```{r}
+
+set.seed(42)
+
+sample_sizes <- seq(from = 10, to = 500, by = 10)
+
+sample_sizes
+
+dat <- 
+  data.frame(sample_size = sample_sizes) |>
+  mutate(mean_mean = map_dbl(sample_size, simulation_1))
+
+ggplot(dat, aes(sample_size, mean_mean)) +
+  geom_hline(yintercept = 0.33, linetype = "dotted") +
+  geom_point() +
+  theme_linedraw()
+
+```
+
+# Check your understanding
+
+- Think about what is actually being done in the last simulation. In lesson 1, we started by generating data from a normal distribution using rnorm, and calculate its mean. We had to re run the chunk each time we wanted to generate a new dataset and mean. We wrote a for loop (or apply, or replicate) to do this part an arbitrary number of times with a single click. We wrapped this in a function to be able to change the inputs and run the same code an arbitrary number of times without repeating the loop code. We then used map to map the function onto a range of inputs in a single line of code. How many times would you have had to manually run the original rnorm code to produce the output in the final plot, if you were doing this all manually?
+- This simulation is still limited, as it only produces the results (the mean of means for that sample size). It can't return multiple estimates (eg the mean and also SD), and it only returns the summary (the mean of means) and not a) each simulated dataset or b) the mean of each simulated dataset.  
 
 # Session info
 
