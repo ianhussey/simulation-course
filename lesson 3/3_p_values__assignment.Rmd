@@ -1,0 +1,152 @@
+---
+title: "Understanding *p* values using a simulations [assignment]"
+subtitle: "Using the example of Pearson's $r$ correlations"
+author: "Ian Hussey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+# Check your learning
+
+- What is the distribution of *p* values under the null hypothesis? What does this actually mean, with regard to what *p* values you should expect when the true effect is null (zero population effect)?
+- What is the distribution of *p* values under the alternative hypothesis? What does this actually mean, with regard to what *p* values you should expect when the true effect is non-null (non-zero population effect)? What happens to *p*-values when the true population effect is large relative to small? 
+- Can you draw a 2X2 'truth table', i.e., test result (significant vs non-significant) and the true effect (population effect zero vs non-zero) and fill in the four boxes with "true positives", "true negatives", "false positives", and "false negatives"?
+- How do the statistical concepts of a test's "alpha value" and its "statistical power" (aka "1 - beta") relate to the concepts of true positives, true negatives, false positives, and false negatives? 
+- Other than the population effect being non-zero, what can give rise to an inflated rate of significant *p* values? There are at least three answers.
+
+# Apply your learning
+
+The code in the below chunk is a copy of the final working simulation from "3_p_values__lesson.Rmd". Modify the code appropriately to create a new simulation that demonstrates the following: 
+
+**In the lesson, we demonstrated that statistical power increases when the true population size increases. Of course, we can't change the true population effect size, we can only observe it. So, what can we do to improve our chances of detecting a given true effect? Statistical power also increases with the sample size employed in a given study. Demonstrate that this is the case via simulation. Additionally, the concept of power applies to all frequentist tests, not just Welch's t-test. In your simulation, the data generation should be correlated data rather than a difference in means between two groups, and data analysis should be the statistical significance of a correlation test (`cor.test()`) rather than a t-test.**
+
+To simulate correlated data, you can you MASS::mvrnorm() or faux::
+
+See Lisa DeBruine's guide to both of them [here](https://debruine.github.io/data-sim-workshops/articles/faux.html#multivariate-normal). Note that getting your head around the correlation matrix you are simulating for takes a little thought, and you may need to practice making matrices of different sizes to understand how it works properly. *NB Simulating multivariate data is useful and important - I'm making this a part of this assignment so you have an opportunity to practice it.*
+
+In this case, you only need to simulate a 2X2 matrix, i.e., two variables whose population correlations are either 0 (population effect of zero) or 0.3 (true population effect of medium size, according to Cohen's 1988 guidelines). You can set population means ($\mu$) to 0 and SDs ($\sigma$) to 1.
+
+Simulate data for sample sizes ranging from N = 25 to N = 400 in steps of 25. Observe the change in the proportion of significant results between (a) the true population effect and (b) as sample size increases, in a table and a plot.
+
+What do you expect to observe? See if you can guess just from the description of the simulation. Check that you're right using the simulation. 
+
+**Make sure that you make use of the advice from lesson 1, "general structure of a simulation", when developing your simulation below. Ie, don't attempt to directly modify the code below, but instead develop and test the individual components and then put them all together.**
+
+```{r fig.height=25, fig.width=7}
+
+# remove all objects from environment ----
+#rm(list = ls())
+
+
+# dependencies ----
+# repeated here for the sake of completeness 
+
+library(tidyr)
+library(dplyr)
+library(forcats)
+library(readr)
+library(purrr) 
+library(ggplot2)
+library(effsize)
+
+
+# set the seed ----
+# for the pseudo random number generator to make results reproducible
+set.seed(123)
+
+
+# define data generating function ----
+generate_data <- function(n_control,
+                          n_intervention,
+                          mean_control,
+                          mean_intervention,
+                          sd_control,
+                          sd_intervention) {
+  
+  data <- 
+    bind_rows(
+      tibble(condition = "control",
+             score = rnorm(n = n_control, mean = mean_control, sd = sd_control)),
+      tibble(condition = "intervention",
+             score = rnorm(n = n_intervention, mean = mean_intervention, sd = sd_intervention))
+    ) |>
+    # control's factor levels must be ordered so that intervention is the first level and control is the second
+    # this ensures that positive cohen's d values refer to intervention > control and not the other way around.
+    mutate(condition = fct_relevel(condition, "intervention", "control"))
+  
+  return(data)
+}
+
+
+# define data analysis function ----
+analyse_data <- function(data) {
+
+  res_t_test <- t.test(formula = score ~ condition, 
+                       data = data,
+                       var.equal = FALSE,
+                       alternative = "two.sided")
+  
+  res <- tibble(p = res_t_test$p.value)
+  
+  return(res)
+}
+
+
+# define experiment parameters ----
+experiment_parameters_grid <- expand_grid(
+  n_control = 50,
+  n_intervention = 50,
+  mean_control = 0,
+  mean_intervention = c(0.0, 0.1, 0.2, 0.5, 0.8, 1.0), 
+  sd_control = 1,
+  sd_intervention = 1,
+  iteration = 1:10000 
+)
+
+
+# run simulation ----
+simulation <- 
+  # using the experiment parameters
+  experiment_parameters_grid |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n_control,
+                                    n_intervention,
+                                    mean_control,
+                                    mean_intervention,
+                                    sd_control,
+                                    sd_intervention),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results = pmap(list(generated_data),
+                                 analyse_data))
+  
+
+# summarise simulation results over the iterations ----
+simulation_reshaped <- simulation |>
+  # convert `analysis_results` nested-data-frame column to regular columns in the df. in this case, the p value.
+  unnest(analysis_results) |>
+  # label the true effect value
+  mutate(true_effect = paste("Cohen's d =", mean_intervention))
+
+
+# table/plot to be written here
+
+```
+
+# Session info
+
+```{r}
+
+sessionInfo()
+
+```
+
+
