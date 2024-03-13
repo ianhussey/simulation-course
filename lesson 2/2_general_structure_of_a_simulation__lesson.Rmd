@@ -431,9 +431,8 @@ simulation_summary <- simulation |>
   mutate(n_control = as.factor(n_control), 
          n_intervention = as.factor(n_intervention)) |>
   # for each level of n_control and n_intervention, calculate power (proportion of iterations where signficiant results were found)
-  group_by(n_control, 
-           n_intervention) |>
-  summarize(power = mean(p < .05), .groups = "drop")
+  summarize(power = mean(p < .05), 
+            .by = c(n_control, n_intervention))
 
 # plot results
 ggplot(simulation_summary, aes(n_control, power, fill = n_intervention)) +
