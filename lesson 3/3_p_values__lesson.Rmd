@@ -265,23 +265,34 @@ We'll take just one non-zero effect size to start: the largest one (Cohen's d = 
 
 simulation_reshaped |>
   filter(true_effect == "Cohen's d = 0.1") |>
-  plot_p_values()
+  plot_p_values() +
+  coord_cartesian(ylim = c(0, 10000))
 
 simulation_reshaped |>
   filter(true_effect == "Cohen's d = 0.2") |>
-  plot_p_values()
+  plot_p_values() +
+  coord_cartesian(ylim = c(0, 10000))
 
 simulation_reshaped |>
   filter(true_effect == "Cohen's d = 0.5") |>
-  plot_p_values()
+  plot_p_values() +
+  coord_cartesian(ylim = c(0, 10000))
 
 simulation_reshaped |>
   filter(true_effect == "Cohen's d = 0.8") |>
-  plot_p_values()
+  plot_p_values() +
+  coord_cartesian(ylim = c(0, 10000))
 
 simulation_reshaped |>
   filter(true_effect == "Cohen's d = 1") |>
-  plot_p_values()
+  plot_p_values() +
+  coord_cartesian(ylim = c(0, 10000))
+
+simulation_reshaped |>
+  filter(true_effect == "Cohen's d = 0") |>
+  summarize(false_positive_rate = mean(p < .05),
+            .by = true_effect) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 2)
 
 simulation_reshaped |>
   filter(true_effect != "Cohen's d = 0") |>
@@ -290,6 +301,8 @@ simulation_reshaped |>
   mutate_if(is.numeric, janitor::round_half_up, digits = 2)
 
 ```
+
+- Why do we change the name of the variable in the table depending on the value true positive rate? Are you able to draw a 2X2 contingency table / confusion matrix that explains the difference between the different names? 
 
 # Dance of the *p* values
 
@@ -364,7 +377,7 @@ unbiased_literature |>
 
 ```
 
-# True effects underlying the published literature 
+## True effects underlying the published literature 
 
 (unknowable in the real world)
 
@@ -394,6 +407,55 @@ unbiased_literature |>
   kable_classic(full_width = FALSE)
   
 ```
+
+## Single study from the published literature
+
+The difficulty of using p values to diagnose the true population effect can also be illustrated, perhaps more easily, by using (a) single studies, where (b) the true effect is either null or small.
+
+```{r}
+
+k_null <- 50
+k_non_null <- 50
+
+unbiased_literature_2 <-
+  bind_rows(
+    simulation_reshaped |>
+      filter(true_effect == "Cohen's d = 0") |>
+      sample_n(k_null),
+    simulation_reshaped |>
+      filter(true_effect == "Cohen's d = 1") |> # "Cohen's d = 0.1" for low power, "Cohen's d = 1" for very high power.
+      sample_n(k_non_null)
+  ) |>
+  mutate(truth_vs_decision = case_when(true_effect == "Cohen's d = 0" & p >= .05 ~ "True negatives",
+                                       true_effect == "Cohen's d = 0" & p <  .05 ~ "False positives",
+                                       true_effect != "Cohen's d = 0" & p >= .05 ~ "False negatives",
+                                       true_effect != "Cohen's d = 0" & p <  .05 ~ "True positives"))
+
+```
+
+Run the following chunk yourself. Using just the *p* value, decide if you think the population effect is null (d = 0.0) or non null (d = 0.1).
+
+```{r}
+
+random_study <- unbiased_literature_2 |>
+  sample_n(size = 1)
+
+paste("p =", round_half_up(random_study$p, 3))
+
+```
+
+Then run the next chunk to see if you were right. 
+
+```{r}
+
+paste("Population effect:", random_study$true_effect)
+random_study$truth_vs_decision
+
+```
+
+You can repeat the above two steps lots of times to check your intuitions. 
+
+Remember that the decision accuracy (true positive, true negative, false positive, false negative) is **unknowable** in the real world when doing substantive research - all you can know is an estimate of your test's power (i.e., 1 - $\beta$) and your false positive rate (i.e., $\alpha$).
 
 # Session info
 
