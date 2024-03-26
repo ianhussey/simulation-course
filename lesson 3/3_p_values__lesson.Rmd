@@ -12,6 +12,18 @@ output:
     toc_float: yes
 ---
 
+```{r}
+
+library(tidyr)
+library(dplyr)
+library(purrr) 
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(janitor)
+
+```
+
 # Overview of tutorial
 
 This lesson focuses on the distributions of *p* values "under the null hypothesis" (i.e., when the null hypothesis is true, aka when the data generating process is a population model where the effect is zero) and "under the alternative hypothesis" (i.e., when the alternative hypothesis is true, aka when the data generating process is a population model where the effect is non-zero).
@@ -94,7 +106,8 @@ plot_p_values <- function(data){ # assumes that data is a data frame with a colu
                        breaks = c(0, 0.05, 0.25, 0.50, 0.75, 1.0), 
                        limits = c(0, 1)) +
     theme_linedraw() +
-    ylab("Frequency")
+    ylab("Frequency") +
+    xlab("p value")
 }
 
 ```
@@ -145,11 +158,11 @@ The code for this simulation is copied from lesson 2 with few modifications.
 
 library(tidyr)
 library(dplyr)
-library(forcats)
-library(readr)
 library(purrr) 
 library(ggplot2)
-library(effsize)
+library(knitr)
+library(kableExtra)
+library(janitor)
 
 
 # set the seed ----
@@ -165,16 +178,16 @@ generate_data <- function(n_control,
                           sd_control,
                           sd_intervention) {
   
-  data <- 
-    bind_rows(
-      tibble(condition = "control",
-             score = rnorm(n = n_control, mean = mean_control, sd = sd_control)),
-      tibble(condition = "intervention",
-             score = rnorm(n = n_intervention, mean = mean_intervention, sd = sd_intervention))
-    ) |>
-    # control's factor levels must be ordered so that intervention is the first level and control is the second
-    # this ensures that positive cohen's d values refer to intervention > control and not the other way around.
-    mutate(condition = fct_relevel(condition, "intervention", "control"))
+  data_control <- 
+    tibble(condition = "control",
+           score = rnorm(n = n_control, mean = mean_control, sd = sd_control))
+  
+  data_intervention <- 
+    tibble(condition = "intervention",
+           score = rnorm(n = n_intervention, mean = mean_intervention, sd = sd_intervention))
+  
+  data <- bind_rows(data_control,
+                    data_intervention) 
   
   return(data)
 }
@@ -423,7 +436,7 @@ unbiased_literature_2 <-
       filter(true_effect == "Cohen's d = 0") |>
       sample_n(k_null),
     simulation_reshaped |>
-      filter(true_effect == "Cohen's d = 1") |> # "Cohen's d = 0.1" for low power, "Cohen's d = 1" for very high power.
+      filter(true_effect == "Cohen's d = 0.1") |> # "Cohen's d = 0.1" for low power, "Cohen's d = 1" for very high power.
       sample_n(k_non_null)
   ) |>
   mutate(truth_vs_decision = case_when(true_effect == "Cohen's d = 0" & p >= .05 ~ "True negatives",
