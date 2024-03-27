@@ -54,3 +54,9 @@ print  t test result to show what were extracting
 emphasise WAY earlier that the group_by in the summarize must match the different values manipulated in the expand grid, and that we can't put it all together unthinkingly.
 
 explain expand grid with 50 participants with small skew, 50 with big, 100 with small, 100 with big etc. PROB DO THIS IN AN EARLIER WEEK.
+
+
+
+lesson 5
+
+talk about pseudocode
