@@ -1,0 +1,291 @@
+---
+title: "Understanding *p* values using a simulations"
+subtitle: "Using the example of Welch's independent *t*-test"
+author: "Ian Hussey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+```{r}
+
+library(tidyr)
+library(dplyr)
+library(purrr) 
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(janitor)
+library(forcats)
+library(plotrix)
+library(stringr)
+library(metan) # for stars_pval()
+
+```
+
+# Overview of tutorial
+
+```{r fig.height=25, fig.width=7}
+
+# remove all objects from environment ----
+rm(list = ls())
+
+
+# dependencies ----
+# repeated here for the sake of completeness 
+
+library(tidyr)
+library(dplyr)
+library(purrr) 
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(janitor)
+
+
+# set the seed ----
+# for the pseudo random number generator to make results reproducible
+set.seed(34)
+
+
+# define data generating function ----
+generate_data <- function(n_per_group, 
+                          mean_intervention_pre, 
+                          mean_control_pre, 
+                          mean_intervention_post, 
+                          mean_control_post) {
+  
+  intervention_pre  <- rnorm(n = n_per_group, mean = mean_intervention_pre,  sd = 1)
+  intervention_post <- rnorm(n = n_per_group, mean = mean_intervention_post, sd = 1)
+  control_pre       <- rnorm(n = n_per_group, mean = mean_control_pre,       sd = 1)
+  control_post      <- rnorm(n = n_per_group, mean = mean_control_post,      sd = 1)
+  
+  data <- data.frame(intervention_pre  = intervention_pre,
+                     intervention_post = intervention_post,
+                     control_pre       = control_pre,
+                     control_post      = control_post)
+  
+  return(data)
+}
+
+
+# define data analysis function ----
+analyse_data <- function(data) {
+  
+  # paired t-tests for within-group comparisons
+  t_test_within_intervention_p <- t.test(data$intervention_pre, data$intervention_post, paired = TRUE)$p.value
+  t_test_within_control_p <- t.test(data$control_pre, data$control_post, paired = TRUE)$p.value
+  
+  # independent t-test for between-group comparison at post
+  t_test_between_post_p <- t.test(data$intervention_post, data$control_post)$p.value
+  
+  # combine p values into df
+  results <- data.frame(t_test_within_intervention_p = t_test_within_intervention_p,
+                        t_test_within_control_p = t_test_within_control_p,
+                        t_test_between_post_p = t_test_between_post_p,
+                        within_sig_nonsig = ifelse(t_test_within_intervention_p < .05 & t_test_within_control_p >= .05, 1, 0),
+                        between_sig = ifelse(t_test_between_post_p < .05, 1, 0),
+                        within_sig_nonsig_between_sig = ifelse(t_test_within_intervention_p < .05 & t_test_within_control_p >= .05 & t_test_between_post_p < .05, 1, 0))
+  
+  return(results)
+}
+
+
+# define experiment parameters ----
+experiment_parameters_grid <- expand_grid(
+  n_per_group = 100,
+  mean_intervention_pre = 0,
+  mean_control_pre = 0,
+  mean_intervention_post = 0.5,
+  mean_control_post = 0.2,
+  iteration = 1:10000
+)
+
+
+# run simulation ----
+simulation <- 
+  # using the experiment parameters
+  experiment_parameters_grid |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n_per_group,
+                                    mean_intervention_pre,
+                                    mean_control_pre,
+                                    mean_intervention_post,
+                                    mean_control_post),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results = pmap(list(generated_data),
+                                 analyse_data))
+
+```
+
+# Summarise simulation results over the iterations
+
+```{r}
+
+simulation_reshaped <- simulation |>
+  unnest(analysis_results) |>
+  summarize(proportion_t_test_within_intervention_sig = mean(t_test_within_intervention_p < .05),
+            proportion_t_test_within_control_sig = mean(t_test_within_control_p < .05),
+            proportion_t_test_between_post_sig = mean(t_test_between_post_p < .05),
+            proportion_within_sig_nonsig = mean(within_sig_nonsig),
+            proportion_between_sig = mean(between_sig),
+            proportion_within_sig_nonsig_between_sig = mean(within_sig_nonsig_between_sig)) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 2)
+
+simulation_reshaped |>
+  gather()
+
+```
+
+# Plot
+
+```{r}
+
+plot_single_iteration <- function(simulation, iteration_to_plot) {
+  
+  # extract results
+  res <- simulation$analysis_results[[iteration_to_plot]]
+  
+  between_post_star <- stars_pval(res$t_test_between_post_p)[1]
+  within_intervention_star <- stars_pval(res$t_test_within_intervention_p)[1]
+  within_control_star <- stars_pval(res$t_test_within_control_p)[1]
+  
+  # mean and SE by condition and timepoint
+  summary <- simulation$generated_data[[iteration_to_plot]] |>
+    pivot_longer(cols = c(intervention_pre,
+                          intervention_post,
+                          control_pre,
+                          control_post),
+                 names_to = c("Condition", "Timepoint"),
+                 names_sep = "_",
+                 values_to = "score") |>
+    mutate(Condition = str_to_title(Condition),
+           Timepoint = str_to_title(Timepoint),
+           Timepoint = fct_relevel(Timepoint, "Pre", "Post")) |>
+    group_by(Condition, Timepoint) |>
+    summarise(mean = mean(score),
+              se = plotrix::std.error(score),
+              .groups = "drop") 
+  
+  # plot
+  ggplot(summary, aes(Timepoint, mean, fill = Condition)) +
+    geom_bar(stat = "identity", position = position_dodge(width = 0.9), color = "black") +
+    geom_errorbar(aes(ymin = mean - se,  # *1.96
+                      ymax = mean + se),  # *1.96
+                  color = "#22292F",
+                  width = .1,
+                  position = position_dodge(width = 0.9)) +
+    scale_fill_viridis_d(begin = 0.3, end = 0.7) +
+    theme_bw() +
+    ylab("Score") +
+    # # between post sig bars
+    # geom_path(data = data.frame(timepoint = c(0.75, 1.25),
+    #                             mean      = c(0.45, 0.45),
+    #                             Condition = "Control"), # dummy
+    #           aes(timepoint, max(summary$mean) + max(summary$se) + -0.03)) +
+    # annotate("text", x = 1, y = max(summary$mean) + max(summary$se) + 0.00, label = between_post_star) +
+    # between post sig bars
+    geom_path(data = data.frame(timepoint = c(1.75, 2.25),
+                                mean      = c(0.45, 0.45),
+                                Condition = "Control"), # dummy
+              aes(timepoint, max(summary$mean) + max(summary$se) + 0.03)) +
+    annotate("text", x = 2, y = max(summary$mean) + max(summary$se) + 0.06, label = between_post_star) +
+    # within intervention sig bars
+    geom_path(data = data.frame(timepoint = c(1.25, 2.25),
+                                mean      = c(0.45, 0.45),
+                                Condition = "Control"), # dummy
+              aes(timepoint, max(summary$mean) + max(summary$se) + 0.09)) +
+    annotate("text", x = 1.75, y = max(summary$mean) + max(summary$se) + 0.12, label = within_intervention_star) +
+    # within control sig bars
+    geom_path(data = data.frame(timepoint = c(0.75, 1.75),
+                                mean      = c(0.45, 0.45),
+                                Condition = "Control"), # dummy
+              aes(timepoint, max(summary$mean) + max(summary$se) + 0.15)) +
+    annotate("text", x = 1.25, y = max(summary$mean) + max(summary$se) + 0.18, label = within_control_star)
+}
+
+```
+
+
+```{r}
+
+p <- plot_single_iteration(simulation = simulation,
+                           iteration_to_plot = 4)
+
+p
+
+ggsave("interaction_baseline.pdf", plot = p, height = 4, width = 6)
+
+```
+
+
+```{r}
+
+for(i in 1:10){
+  plot_single_iteration(simulation = simulation,
+                        iteration_to_plot = i) |>
+    print()
+}
+
+```
+
+- Error bars are standard errors
+
+```{r}
+
+# Install and load necessary packages
+# install.packages("ggplot2")
+# install.packages("ggpubr")
+
+library(ggplot2)
+library(ggpubr)
+
+# Sample data
+# Assuming df is your data frame with columns: Group, Time, and Value
+# Replace df with your actual data frame name
+df <- data.frame(
+  Group = rep(c("A", "B"), each = 2),
+  Time = rep(c("Pre", "Post"), times = 2),
+  Value = c(10, 15, 12, 18)
+)
+
+# Perform pairwise comparisons
+# Assuming pairwise comparisons are stored in a data frame called comparisons
+# Replace comparisons with your actual data frame name containing pairwise comparisons
+comparisons <- pairwise.t.test(df$Value, df$Group, paired = TRUE)
+
+# Extract p-values
+p_values <- comparisons$p.value
+
+# Create the plot
+plot <- ggplot(df, aes(x = Group, y = Value, fill = Time)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = ifelse(p_values < 0.05, "*", "")), 
+            position = position_dodge(width = 0.9), vjust = -0.5, size = 6) +
+  labs(x = "Group", y = "Value", fill = "Time") +
+  theme_minimal()
+
+# Print the plot
+print(plot)
+
+
+```
+
+
+# Session info
+
+```{r}
+
+sessionInfo()
+
+```
+
+
