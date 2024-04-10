@@ -60,3 +60,10 @@ explain expand grid with 50 participants with small skew, 50 with big, 100 with 
 lesson 5
 
 talk about pseudocode
+
+interpreting RCTs:
+
+- Add example to the solution: what if there are differences at both baseline and followup
+- add paper on interpretation of nonsignificant results to reading list before class
+- mention equivalence tests?
+- quiz for checking understanding?
