@@ -26,7 +26,7 @@ The code in the below chunk is a copy of the final working simulation from "3_p_
 
 **In the lesson, we demonstrated that statistical power increases when the true population size increases. Of course, we can't change the true population effect size, we can only observe it. So, what can we do to improve our chances of detecting a given true effect? Statistical power also increases with the sample size employed in a given study. Demonstrate that this is the case via simulation. Additionally, the concept of power applies to all frequentist tests, not just Welch's t-test. In your simulation, the data generation should be correlated data rather than a difference in means between two groups, and data analysis should be the statistical significance of a correlation test (`cor.test()`) rather than a t-test.**
 
-To simulate correlated data, you can you MASS::mvrnorm() or faux::
+To simulate correlated data, you can you MASS::mvrnorm() or faux::rnorm_multi()
 
 See Lisa DeBruine's guide to both of them [here](https://debruine.github.io/data-sim-workshops/articles/faux.html#multivariate-normal). Note that getting your head around the correlation matrix you are simulating for takes a little thought, and you may need to practice making matrices of different sizes to understand how it works properly. *NB Simulating multivariate data is useful and important - I'm making this a part of this assignment so you have an opportunity to practice it.*
 
