@@ -1,0 +1,159 @@
+---
+title: "Reanalysis of Palhano-Fontes et al. (2018) 'Rapid antidepressant effects of the psychedelic ayahuasca in treatment-resistant depression: a randomized placebo-controlled trial'"
+author: "Ian Hussey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(message = FALSE, 
+                      warning = FALSE)
+
+```
+
+# Data sources
+
+- Individual participant data was reported in supplementary materials figure S1. We extracted those numbers into data.xlsx, which is loaded here.
+
+```{r}
+
+# dependencies
+library(tidyverse)
+library(scrutiny)
+library(readxl)
+library(effsize)
+library(janitor)
+library(knitr)
+library(kableExtra)
+library(ggstance)
+library(emmeans)
+
+round_half_up_min_decimals <- function(x, digits = 2) {
+  sprintf(paste0("%.", digits, "f"), janitor::round_half_up(x, digits = digits))
+}
+
+min_decimals <- function(x, digits = 2) {
+  sprintf(paste0("%.", digits, "f"), x)
+}
+
+# cohen's d from data function
+tidy_ttest_cohens_d_from_data <- function(data){
+  require(effsize)
+  fit <- t.test(score ~ condition, 
+                data = data,
+                var.equal = FALSE)
+  es <- effsize::cohen.d(score ~ condition, data = data)
+  res <- data.frame(d_recalc_data = es$estimate,
+                    d_recalc_data_ci_lower = es$conf.int[1],
+                    d_recalc_data_ci_upper = es$conf.int[2],
+                    p = fit$p.value)
+  return(res)
+}
+
+# tidy_ttest_cohens_d_from_data_alt <- function(data){
+#   require(effectsize)
+#   fit <- t.test(score ~ condition, 
+#                 data = data,
+#                 var.equal = FALSE)
+#   es <- effectsize::cohens_d(score ~ condition, data = data, pooled_sd = TRUE, adjust = FALSE) |> 
+#         as_tibble() |> 
+#         dplyr::select(estimate = Cohens_d, ci_lower = CI_low, ci_upper = CI_high)
+#   
+#   res <- data.frame(d_recalc_data = es$estimate,
+#                     d_recalc_data_ci_lower = es$ci_lower,
+#                     d_recalc_data_ci_upper = es$ci_upper,
+#                     p = fit$p.value)
+#   return(res)
+# }
+
+# extracted from the supplementary materials figure S1
+data_scores <- read_excel("../data/data.xlsx", sheet = "data") 
+
+```
+
+# t test on difference scores at each time point
+
+```{r}
+
+# recalculate and compare
+data_between_from_data_diff <- data_scores |>
+  select(id, condition, HAMD_baseline, HAMD_d7, MADRS_baseline, MADRS_d1, MADRS_d2, MADRS_d7) |>
+  pivot_longer(cols = c("HAMD_d7", "MADRS_d1", "MADRS_d2", "MADRS_d7"),
+               names_to = c("measure", "timepoint"),
+               names_sep = "_",
+               values_to = "score") |>
+  mutate(baseline = case_when(measure == "HAMD" ~ HAMD_baseline,
+                              measure == "MADRS" ~ MADRS_baseline)) |>
+  select(-HAMD_baseline, -MADRS_baseline) |>
+  drop_na() |>
+  mutate(score = score - baseline)
+
+results_between_from_data_diff <- data_between_from_data_diff |>
+  group_by(measure, timepoint) %>%
+  do(tidy_ttest_cohens_d_from_data(.))
+
+```
+
+# t test at each time point
+
+```{r}
+
+# recalculate and compare
+data_between_from_data <- data_scores |>
+  select(id, condition, HAMD_baseline, HAMD_d7, MADRS_baseline, MADRS_d1, MADRS_d2, MADRS_d7) |>
+  pivot_longer(cols = c("HAMD_baseline", "HAMD_d7", "MADRS_baseline", "MADRS_d1", "MADRS_d2", "MADRS_d7"),
+               names_to = c("measure", "timepoint"),
+               names_sep = "_",
+               values_to = "score") 
+
+results_between_from_data <- data_between_from_data |>
+  group_by(measure, timepoint) %>%
+  do(tidy_ttest_cohens_d_from_data(.))
+
+```
+
+# contrast the above two
+
+```{r fig.height=3, fig.width=9}
+
+# combine
+combined_reported_from_data_comparison <- 
+  bind_rows(results_between_from_data |>
+              mutate(method = "score between groups"),
+            results_between_from_data_diff |>
+              mutate(method = "difference score between groups")) |>
+  mutate(measure = case_when(measure == "HAMD" ~ "Hamilton Depression Rating Scale",
+                             measure == "MADRS" ~ "Montgomery-Asberg Depression Rating Scale")) |>
+  relocate(timepoint, .before = measure) |>
+  relocate(method, .after = measure) |>
+  arrange(timepoint, measure, method)
+
+# plot 
+combined_reported_from_data_comparison |>
+  ggplot(aes(d_recalc_data, timepoint, color = method)) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  geom_linerangeh(aes(xmin = d_recalc_data_ci_lower, xmax = d_recalc_data_ci_upper), position = position_dodge(width = 0.3)) +
+  geom_point(position = position_dodge(width = 0.3)) +
+  theme_linedraw() +
+  scale_color_viridis_d(begin = 0.3, end = 0.7, guide = guide_legend(reverse = TRUE)) +
+  xlab("Cohen's d") +
+  ylab("Timepoint") +
+  facet_wrap(~ measure)
+
+# table
+combined_reported_from_data_comparison |>
+  mutate(p = as.character(round_half_up_min_decimals(p, 3))) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 2) |>
+  kable(align = "c", col.names = c("Timepoint", "Measure", "Method", "Cohen's d", "Lower", "Upper", "p")) |>
+  kable_classic(full_width = FALSE) |>
+  add_header_above(c(" ", " ", " ", " ", "95% CI" = 2, " ")) 
+
+```
+
