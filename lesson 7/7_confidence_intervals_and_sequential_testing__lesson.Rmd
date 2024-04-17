@@ -93,7 +93,7 @@ analyse_data <- function(data) {
   
   res_t_test <- t.test(formula = score ~ condition, 
                        data = data,
-                       var.equal = TRUE,
+                       var.equal = FALSE,
                        alternative = "two.sided")
   
   res_cohens_d <- effsize::cohen.d(formula = score ~ condition,  
@@ -519,9 +519,13 @@ Notice how the 95% CI widths narrow as sample size increases. Consider this in t
 
 Separately, use this plot to think back to the interpretation of non-significant p values. Remember the phrase "absence of evidence does not equal evidence of absence"? This plot helps explain why we cannot interpret non-significant p values as evidence of equivalence: when the 95% CI is very wide, a very large range of Cohen's ds are all compatible with the results. E.g., when N = 20, values of Cohen's d that are the estimate ± 1.0 are all equally compatible. If the estimate was 0.10, the population value is estimated to be in the range [-.90, +1.10], or anywhere between a "large negative effect" and a "large positive effect". The non-significance of this result tells us little, because non-results were very likely due to low statistical power, aka poor precision. Equally, a non-significant p values when the 95% CI is ± 0.1 (when the sample size is much higher) tells us a lot more than when it is ± 1.0. So, non-significant p values by themselves cannot tell us about equivalences.  
 
-# Try other simulation parameters and seeds
+# Expand your understanding
 
-Note that I have chosen values for `set.seed` that produce particularly extreme results that dance back and forth. Try changing the seed values and the parameter estimates (e.g., inrease the sample size and/or population effect sizes) and observe the results.
+Note that I have chosen values for `set.seed` that produce particularly extreme results that dance back and forth. Try changing the seed values and the parameter estimates. E.g.:
+
+- What seeds produce very different patterns of results (e.g., `2837`).
+- Make the effect size quite large. How quickly do results stabilize relative to when the sample size is small?
+- How wide are 95% CIs when the sample size is much larger, e.g. 1000? (you can also change the `minimum_n_per_group` and `additional_n_per_group_per_step` values to be larger to make the plots more readable)
 
 # Session info
 
