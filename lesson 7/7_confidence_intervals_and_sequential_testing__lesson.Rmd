@@ -194,7 +194,7 @@ experiment_parameters_grid_null <- expand_grid(
   sd_intervention = 1,
   minimum_n_per_group = 10,
   additional_n_per_group_per_step = 4,
-  iteration = 1:1 
+  iteration = 1:1 # note only one iteration as the "do it lots of time" part of this simulation is, atypically, inside the analysis instead
 )
 
 
@@ -366,7 +366,7 @@ experiment_parameters_grid_true <- expand_grid(
   sd_intervention = 1,
   minimum_n_per_group = 10,
   additional_n_per_group_per_step = 4,
-  iteration = 1:1 
+  iteration = 1:1 # note only one iteration as the "do it lots of time" part of this simulation is, atypically, inside the analysis instead
 )
 
 
