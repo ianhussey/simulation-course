@@ -1,0 +1,534 @@
+---
+title: "p values, Confidence Intervals, and sequential testing"
+author: "Ian Hussey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+# Overview of lesson
+
+In a previous lesson, we briefly talked about the "dance of the p-values". Because p values are uniformly distributed under the null hypothesis, when the true effect is null, p values between studies will dance back and forth between all possible values with equal probability (from 0 to 1). 
+
+But what happens when we're not looking at independent studies, but adding additional participants to the same study, and reanalyzing repeatedly with a little more data each time?
+
+The figure below illustrates this. The first analysis uses participants 1 to 10 in each group. The second analysis uses participants 1 to 15 in each group. The third uses participants 1 to 20 in each group, etc.
+
+This involves dependencies between the datasets, so the results will be related to one another too.
+
+This lesson simulates such *sequential analysis*, in order to show:
+
+1. How p values 'dance' in sequential analysis
+2. Why 'optional stopping' is problematic and a form of p-hacking.
+3. The relationship between p values and Confidence Intervals.
+4. How the width of Confidence Intervals narrow as sample size increases.
+5. How p values, confidence intervals, and statistical power / false positive rates are all interrelated.
+
+```{r}
+knitr::include_graphics("images/sequential analysis illustration.png", dpi = 100)
+```
+
+# Simulations
+
+```{r}
+
+# remove all objects from environment ----
+rm(list = ls())
+
+
+# dependencies ----
+# repeated here for the sake of completeness 
+
+library(tidyr)
+library(dplyr)
+library(forcats)
+library(readr)
+library(purrr) 
+library(ggplot2)
+library(effsize)
+library(ggstance)
+library(scales)
+
+dir.create("plots")
+
+
+# define data generating function ----
+generate_data <- function(n_control,
+                          n_intervention,
+                          mean_control,
+                          mean_intervention,
+                          sd_control,
+                          sd_intervention) {
+  
+  data <- 
+    bind_rows(
+      tibble(condition = "control",
+             score = rnorm(n = n_control, mean = mean_control, sd = sd_control)),
+      tibble(condition = "intervention",
+             score = rnorm(n = n_intervention, mean = mean_intervention, sd = sd_intervention))
+    ) |>
+    # control's factor levels must be ordered so that intervention is the first level and control is the second
+    # this ensures that positive cohen's d values refer to intervention > control and not the other way around.
+    mutate(condition = fct_relevel(condition, "intervention", "control")) |>
+    # create a participant id column and then arrange by it, to facilitate sequential analysis
+    group_by(condition) |>
+    mutate(id = row_number(),
+           unique_id = paste(id, condition, sep = "_")) |>
+    ungroup() |>
+    arrange(id)
+  
+  return(data)
+}
+
+
+# define data analysis function ----
+analyse_data <- function(data) {
+  # dependencies
+  require(effsize)
+  
+  res_t_test <- t.test(formula = score ~ condition, 
+                       data = data,
+                       var.equal = TRUE,
+                       alternative = "two.sided")
+  
+  res_cohens_d <- effsize::cohen.d(formula = score ~ condition,  
+                                   within = FALSE,
+                                   data = data)
+  
+  res <- tibble(p = res_t_test$p.value, 
+                cohens_d = res_cohens_d$estimate,  
+                cohens_d_ci_lower = res_cohens_d$conf.int["lower"],
+                cohens_d_ci_upper = res_cohens_d$conf.int["upper"])
+  
+  return(res)
+}
+
+# # for loop solution
+# analyse_data_sequential <- function(data, minimum_n_per_group, additional_n_per_group_per_step) {
+#   # calculate the total number of iterations needed
+#   n_per_group <- data |> 
+#     summarize(n_per_group = max(id)) |> 
+#     pull(n_per_group)
+#   
+#   iter_count <- ceiling((n_per_group - minimum_n_per_group) / additional_n_per_group_per_step) + 1
+# 
+#   # Initialize an empty data frame for results
+#   results <- data.frame()
+# 
+#   # Perform analyses iteratively
+#   for (iter in 1:iter_count) {
+#     # Calculate the row limit for the current iteration
+#     highest_id <- min(minimum_n_per_group + (iter - 1) * additional_n_per_group_per_step, n_per_group)
+# 
+#     # Subset the data frame for the current iteration
+#     data_subset <- data |>
+#       filter(id <= highest_id)
+# 
+#     # Perform the analysis on the subset
+#     current_results <- analyse_data(data_subset) |>
+#       mutate(sequential_analysis_n_per_group = highest_id)
+# 
+#     # Combine the current results with the overall results
+#     results <- rbind(results, current_results)
+#   }
+#   
+#   return(results)
+# }
+
+# purrr solution, for consistency
+analyse_data_sequential <- function(data, minimum_n_per_group, additional_n_per_group_per_step) {
+  # calculate the total number of iterations needed
+  n_per_group <- data |> 
+    summarize(n_per_group = max(id)) |> 
+    pull(n_per_group)
+  
+  # create a sequence of n_per_group_current_analysis that defines the highest participant id value that defines each data subset
+  n_per_group_current_analysis <- seq(minimum_n_per_group, n_per_group, by = additional_n_per_group_per_step)
+  
+  # if the last element of the n_per_group_current_analysis vector is not the total sample size, append the total sample size as the last element
+  # this is useful if the (total n per group - minimum_n_per_group) / additional_n_per_group_per_step has a remainder, to ensure all participants get used
+  if (n_per_group_current_analysis[length(n_per_group_current_analysis)] != n_per_group) {
+    n_per_group_current_analysis <- c(n_per_group_current_analysis, n_per_group)  # Ensure the last point includes all rows
+  }
+  
+  analyze_by_subsset <- function(n_per_group_current_analysis) {
+    data_subset <- data |>
+      filter(id <= n_per_group_current_analysis)
+      
+    results_subset <- analyse_data(data_subset) |>
+      mutate(sequential_analysis_n_per_group = n_per_group_current_analysis)
+    
+    return(results_subset)
+  }
+  
+  # Use map_dfr to apply the analysis to each subset and combine the results
+  results <- map_dfr(n_per_group_current_analysis, analyze_by_subsset)
+  
+  return(results)
+}
+
+```
+
+## Population null effect
+
+I.e., population Cohen's d = 0.0 
+
+```{r}
+
+# set the seed ----
+# for the pseudo random number generator to make results reproducible
+set.seed(47)
+
+# define experiment parameters ----
+experiment_parameters_grid_null <- expand_grid(
+  n_control = 100,
+  n_intervention = 100, # functions above assume n_control == n_intervention
+  mean_control = 0,
+  mean_intervention = 0, 
+  sd_control = 1,
+  sd_intervention = 1,
+  minimum_n_per_group = 10,
+  additional_n_per_group_per_step = 4,
+  iteration = 1:1 
+)
+
+
+# run simulation ----
+simulation_null <- 
+  # using the experiment parameters
+  experiment_parameters_grid_null |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n_control,
+                                    n_intervention,
+                                    mean_control,
+                                    mean_intervention,
+                                    sd_control,
+                                    sd_intervention),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results = pmap(list(generated_data,
+                                      minimum_n_per_group,
+                                      additional_n_per_group_per_step),
+                                 analyse_data_sequential))
+  
+
+# summarise simulation results over the iterations ----
+## estimate power  
+## ie what proportion of p values are significant (< .05)
+simulation_summary_null <- simulation_null |>
+  unnest(analysis_results) |>
+  mutate(cohens_d_centered = cohens_d - cohens_d,
+         cohens_d_ci_lower_centered = cohens_d_ci_lower - cohens_d,
+         cohens_d_ci_upper_centered = cohens_d_ci_upper - cohens_d,
+         significant = p < .05)
+
+```
+
+### Dance of the p values
+
+```{r fig.height=6, fig.width=7}
+
+p_dance_of_p_values_null <- 
+  ggplot(simulation_summary_null, aes(p, as.factor(sequential_analysis_n_per_group*2), color = significant)) +
+  geom_rect(aes(xmin = 0, xmax = 0.05, ymin = -Inf, ymax = Inf), fill = "grey85", alpha = 0.05, color = NA) +
+  geom_point(position = position_dodge(width = 0.3)) +
+  scale_color_viridis_d(begin = 0.3, end = 0.7, guide = guide_legend(reverse = TRUE)) +
+  scale_x_continuous(breaks = c(0, 0.05, 0.2, 0.4, 0.6, 0.8, 1),
+                     labels = c(0, 0.05, 0.2, 0.4, 0.6, 0.8, 1)) +
+  coord_cartesian(xlim = c(0, 1)) +
+  theme_linedraw() +
+  xlab("p value") +
+  ylab("Total N")
+
+p_dance_of_p_values_null
+
+# ggsave(filename = "p_dance_of_p_values_null.pdf",
+#        plot = p_dance_of_p_values_null,
+#        path = "plots/",
+#        device = "pdf",
+#        width = 7,
+#        height = 6)
+
+```
+
+### Dance of the effect size estimates
+
+```{r fig.height=6, fig.width=7}
+
+p_dance_of_effect_sizes_null <- 
+  ggplot(simulation_summary_null, aes(cohens_d, as.factor(sequential_analysis_n_per_group*2))) +
+  geom_vline(xintercept = 0, color = "red") +
+  #geom_linerangeh(aes(xmin = cohens_d_ci_lower, xmax = cohens_d_ci_upper), position = position_dodge(width = 0.3)) +
+  geom_point(position = position_dodge(width = 0.3)) +
+  scale_color_viridis_d(begin = 0.3, end = 0.7, guide = guide_legend(reverse = TRUE)) +
+  scale_x_continuous(breaks = pretty_breaks()) +
+  theme_linedraw() +
+  xlab("Cohen's d") +
+  ylab("Total N") +
+  ggtitle("As sample size increases, effect size estimate approaches the true effect\n(Red line represents true effect size: Cohen's d = 0)")
+
+p_dance_of_effect_sizes_null
+
+# ggsave(filename = "p_dance_of_effect_sizes_null.pdf",
+#        plot = p_dance_of_effect_sizes_null,
+#        path = "plots/",
+#        device = "pdf",
+#        width = 7,
+#        height = 6)
+
+```
+
+### Confidence intervals and p values
+
+```{r fig.height=6, fig.width=7}
+
+p_confidence_intervals_p_values_null <- 
+  ggplot(simulation_summary_null, aes(cohens_d, as.factor(sequential_analysis_n_per_group*2), color = significant)) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  geom_linerangeh(aes(xmin = cohens_d_ci_lower, xmax = cohens_d_ci_upper), position = position_dodge(width = 0.3)) +
+  geom_point(position = position_dodge(width = 0.3)) +
+  scale_color_viridis_d(begin = 0.3, end = 0.7, guide = guide_legend(reverse = TRUE)) +
+  scale_x_continuous(breaks = pretty_breaks()) +
+  theme_linedraw() +
+  xlab("Cohen's d") +
+  ylab("Total N") +
+  ggtitle("Confidence Intervals and p values provide same conclusions (usually)")
+
+p_confidence_intervals_p_values_null
+
+# ggsave(filename = "p_confidence_intervals_p_values_null.pdf",
+#        plot = p_confidence_intervals_p_values_null,
+#        path = "plots/",
+#        device = "pdf",
+#        width = 7,
+#        height = 6)
+
+```
+
+- Notice how conclusions change as additional data is collected. The estimate of Cohen's d, and its confidence intervals also become narrower. The effect goes from being statistically non-significant, to significant, back and forth (although note that I have chosen a seed value that produces particularly extreme results here).
+- This is why "optional stopping", or selecting determining when to stop collecting data, usually based on obtaining significant results, is problematic and a form of p-hacking. If this was a real study and the authors stopped collecting the moment they hit statistical significance (at n = 60) they might have a more publishable result, but it would be the incorrect conclusion: the population effect is in fact null, and these significant results are just random noise.
+- This is why determining sample size ahead of time (e.g., via power analysis using the Smallest Effect Size of Interest) and holding ourselves to this sample size via preregistration are important in order to control false-positive rates.
+
+### Effect size estimation precision increases with sample size
+
+Which is another way of saying that statistical power increases with sample size. This is more obvious when the population effect size is non-zero (see furhter below).
+
+```{r fig.height=6, fig.width=7}
+
+p_effect_size_interval_width_null <- 
+  ggplot(simulation_summary_null, aes(cohens_d_centered, as.factor(sequential_analysis_n_per_group*2))) +
+  geom_linerangeh(aes(xmin = cohens_d_ci_lower_centered, xmax = cohens_d_ci_upper_centered), position = position_dodge(width = 0.3)) +
+  #geom_point(position = position_dodge(width = 0.3)) +
+  scale_color_viridis_d(begin = 0.3, end = 0.7, guide = guide_legend(reverse = TRUE)) +
+  scale_x_continuous(breaks = pretty_breaks()) +
+  theme_linedraw() +
+  xlab("Cohen's d's 95% CI width\n(centered on the Cohen's d estimate)") +
+  ylab("Total N") +
+  ggtitle("The width (precision) of 95% Confidence Intervals becomes narrower\nas sample size increases")
+
+p_effect_size_interval_width_null
+
+# ggsave(filename = "p_effect_size_interval_width_null.pdf",
+#        plot = p_effect_size_interval_width_null,
+#        path = "plots/",
+#        device = "pdf",
+#        width = 6,
+#        height = 6)
+
+```
+
+## Population non-null effect
+
+I.e., population Cohen's d = 0.1 (very small, but real)
+
+```{r fig.height=6, fig.width=7}
+
+# set the seed ----
+# for the pseudo random number generator to make results reproducible
+set.seed(47)
+
+# define experiment parameters ----
+population_es <- 0.1 # used later for plotting
+
+experiment_parameters_grid_true <- expand_grid(
+  n_control = 100,
+  n_intervention = 100, # functions above assume n_control == n_intervention
+  mean_control = 0,
+  mean_intervention = population_es, 
+  sd_control = 1,
+  sd_intervention = 1,
+  minimum_n_per_group = 10,
+  additional_n_per_group_per_step = 4,
+  iteration = 1:1 
+)
+
+
+# run simulation ----
+simulation_true <- 
+  # using the experiment parameters
+  experiment_parameters_grid_true |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n_control,
+                                    n_intervention,
+                                    mean_control,
+                                    mean_intervention,
+                                    sd_control,
+                                    sd_intervention),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results = pmap(list(generated_data,
+                                      minimum_n_per_group,
+                                      additional_n_per_group_per_step),
+                                 analyse_data_sequential))
+  
+
+# summarise simulation results over the iterations ----
+## estimate power  
+## ie what proportion of p values are significant (< .05)
+simulation_summary_true <- simulation_true |>
+  unnest(analysis_results) |>
+  mutate(cohens_d_centered = cohens_d - cohens_d,
+         cohens_d_ci_lower_centered = cohens_d_ci_lower - cohens_d,
+         cohens_d_ci_upper_centered = cohens_d_ci_upper - cohens_d,
+         significant = p < .05)
+
+
+```
+
+### Dance of the p values
+
+```{r fig.height=6, fig.width=7}
+
+p_dance_of_p_values_true <- 
+  ggplot(simulation_summary_true, aes(p, as.factor(sequential_analysis_n_per_group*2), color = significant)) +
+  geom_rect(aes(xmin = 0, xmax = 0.05, ymin = -Inf, ymax = Inf), fill = "grey85", alpha = 0.05, color = NA) +
+  geom_point(position = position_dodge(width = 0.3)) +
+  scale_color_viridis_d(begin = 0.3, end = 0.7, guide = guide_legend(reverse = TRUE)) +
+  scale_x_continuous(breaks = c(0, 0.05, 0.2, 0.4, 0.6, 0.8, 1),
+                     labels = c(0, 0.05, 0.2, 0.4, 0.6, 0.8, 1)) +
+  coord_cartesian(xlim = c(0, 1)) +
+  theme_linedraw() +
+  xlab("p value") +
+  ylab("Total N")
+
+p_dance_of_p_values_true
+
+# ggsave(filename = "p_dance_of_p_values_true.pdf",
+#        plot = p_dance_of_p_values_true,
+#        path = "plots/",
+#        device = "pdf",
+#        width = 7,
+#        height = 6)
+
+```
+
+### Dance of the effect size estimates
+
+```{r fig.height=6, fig.width=7}
+
+p_dance_of_effect_sizes_true <- 
+  ggplot(simulation_summary_true, aes(cohens_d, as.factor(sequential_analysis_n_per_group*2))) +
+  geom_vline(xintercept = population_es, color = "red") +
+  #geom_linerangeh(aes(xmin = cohens_d_ci_lower, xmax = cohens_d_ci_upper), position = position_dodge(width = 0.3)) +
+  geom_point(position = position_dodge(width = 0.3)) +
+  scale_color_viridis_d(begin = 0.3, end = 0.7, guide = guide_legend(reverse = TRUE)) +
+  scale_x_continuous(breaks = pretty_breaks()) +
+  theme_linedraw() +
+  xlab("Cohen's d") +
+  ylab("Total N") +
+  ggtitle(paste("As sample size increases, effect size estimate approaches the true effect\n(Red line represents true effect size: Cohen's d =", population_es, ")"))
+
+p_dance_of_effect_sizes_true
+
+# ggsave(filename = "p_dance_of_effect_sizes_true.pdf",
+#        plot = p_dance_of_effect_sizes_true,
+#        path = "plots/",
+#        device = "pdf",
+#        width = 7,
+#        height = 6)
+
+```
+
+### Confidence intervals and p values
+
+```{r fig.height=6, fig.width=7}
+
+p_confidence_intervals_p_values_true <- 
+  ggplot(simulation_summary_true, aes(cohens_d, as.factor(sequential_analysis_n_per_group*2), color = significant)) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  geom_linerangeh(aes(xmin = cohens_d_ci_lower, xmax = cohens_d_ci_upper), position = position_dodge(width = 0.3)) +
+  geom_point(position = position_dodge(width = 0.3)) +
+  scale_color_viridis_d(begin = 0.3, end = 0.7, guide = guide_legend(reverse = TRUE)) +
+  scale_x_continuous(breaks = pretty_breaks()) +
+  theme_linedraw() +
+  xlab("Cohen's d") +
+  ylab("Total N") +
+  ggtitle("Confidence Intervals and p values provide same conclusions (usually)")
+
+p_confidence_intervals_p_values_true
+
+# ggsave(filename = "p_confidence_intervals_p_values_true.pdf",
+#        plot = p_confidence_intervals_p_values_true,
+#        path = "plots/",
+#        device = "pdf",
+#        width = 7,
+#        height = 6)
+
+```
+
+### Effect size estimation precision increases with sample size
+
+Which is another way of saying that statistical power increases with sample size.
+
+```{r fig.height=6, fig.width=7}
+
+p_effect_size_interval_width_true <- 
+  ggplot(simulation_summary_true, aes(cohens_d_centered, as.factor(sequential_analysis_n_per_group*2))) +
+  geom_linerangeh(aes(xmin = cohens_d_ci_lower_centered, xmax = cohens_d_ci_upper_centered), position = position_dodge(width = 0.3)) +
+  #geom_point(position = position_dodge(width = 0.3)) +
+  scale_color_viridis_d(begin = 0.3, end = 0.7, guide = guide_legend(reverse = TRUE)) +
+  scale_x_continuous(breaks = pretty_breaks()) +
+  theme_linedraw() +
+  xlab("Cohen's d's 95% CI width\n(centered on the Cohen's d estimate)") +
+  ylab("Total N") +
+  ggtitle("The width (precision) of 95% Confidence Intervals becomes narrower\nas sample size increases")
+
+p_effect_size_interval_width_true
+
+# ggsave(filename = "p_effect_size_interval_width_true.pdf",
+#        plot = p_effect_size_interval_width_true,
+#        path = "plots/",
+#        device = "pdf",
+#        width = 6,
+#        height = 6)
+
+```
+
+This plot purposefully ignores what the actual Cohen's d estimate is in each analysis, to focus instead on what the width of its confidence intervals are. Confidence intervals and p values are - putting aside some issues of how they're implemented - intended to be a restatement of the same information about long run probabilities, and should (usually) produce the same conclusions. 
+
+Notice how the 95% CI widths narrow as sample size increases. Consider this in terms of statistical power: if the population effect size was Cohen's d = .50, the plot suggests that sample sizes less than 68 are unlikely to detect it, because even if the Cohen's d estimate was perfectly correct the 95% CIs would still overlap zero (i.e., be non-significant). Conversely, at larger sample sizes, it becomes easier and easier for an effect size that is truly non-zero to be detectably non-zero, as the 95% CIs are narrower.
+
+Separately, use this plot to think back to the interpretation of non-significant p values. Remember the phrase "absence of evidence does not equal evidence of absence"? This plot helps explain why we cannot interpret non-significant p values as evidence of equivalence: when the 95% CI is very wide, a very large range of Cohen's ds are all compatible with the results. E.g., when N = 20, values of Cohen's d that are the estimate ± 1.0 are all equally compatible. If the estimate was 0.10, the population value is estimated to be in the range [-.90, +1.10], or anywhere between a "large negative effect" and a "large positive effect". The non-significance of this result tells us little, because non-results were very likely due to low statistical power, aka poor precision. Equally, a non-significant p values when the 95% CI is ± 0.1 (when the sample size is much higher) tells us a lot more than when it is ± 1.0. So, non-significant p values by themselves cannot tell us about equivalences.  
+
+# Try other simulation parameters and seeds
+
+Note that I have chosen values for `set.seed` that produce particularly extreme results that dance back and forth. Try changing the seed values and the parameter estimates (e.g., inrease the sample size and/or population effect sizes) and observe the results.
+
+# Session info
+
+```{r}
+
+sessionInfo()
+
+```
+
+
