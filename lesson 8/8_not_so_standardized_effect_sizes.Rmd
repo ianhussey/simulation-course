@@ -1,0 +1,185 @@
+---
+title: "Not so standardized effect-sizes"
+subtitle: "Using the example of Welch's independent *t*-test"
+author: "Ian Hussey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+# Overview of tutorial
+
+This lesson focuses on the distributions of *p* values "under the null hypothesis" (i.e., when the null hypothesis is true, aka when the data generating process is a population model where the effect is zero) and "under the alternative hypothesis" (i.e., when the alternative hypothesis is true, aka when the data generating process is a population model where the effect is non-zero).
+
+Without looking into the math, let's use simulations to visualise these distributions, in order to understand *p* values better.
+
+# Plotting distributions
+
+In the first lesson, we refreshed our knowledge of distributions and used ggplot to visualise them.
+
+We covered the uniform distribution, where all values between a given range are equally probable, and the normal distribution, which follows a normal (gaussian) bell-shaped distribution. 
+
+# Distribution of SDs in a given study
+
+```{r}
+
+# remove all objects from environment ----
+#rm(list = ls())
+
+
+# dependencies ----
+# repeated here for the sake of completeness 
+
+library(tidyr)
+library(dplyr)
+library(forcats)
+library(readr)
+library(purrr) 
+library(ggplot2)
+library(effsize)
+
+
+# set the seed ----
+# for the pseudo random number generator to make results reproducible
+set.seed(123)
+
+
+# define data generating function ----
+generate_data <- function(n_control,
+                          n_intervention,
+                          mean_control,
+                          mean_intervention,
+                          sd_control,
+                          sd_intervention) {
+  
+  data <- 
+    bind_rows(
+      tibble(condition = "control",
+             score = rnorm(n = n_control, mean = mean_control, sd = sd_control)),
+      tibble(condition = "intervention",
+             score = rnorm(n = n_intervention, mean = mean_intervention, sd = sd_intervention))
+    ) |>
+    # control's factor levels must be ordered so that intervention is the first level and control is the second
+    # this ensures that positive cohen's d values refer to intervention > control and not the other way around.
+    mutate(condition = fct_relevel(condition, "intervention", "control"))
+  
+  return(data)
+}
+
+
+# define data analysis function ----
+analyse_data <- function(data) {
+  
+  res_t_test <- t.test(formula = score ~ condition, 
+                       data = data,
+                       var.equal = FALSE,
+                       alternative = "two.sided")
+  
+  res <- tibble(p = res_t_test$p.value)
+  
+  return(res)
+}
+
+
+# define experiment parameters ----
+experiment_parameters_grid <- expand_grid(
+  n_control = 50,
+  n_intervention = 50,
+  mean_control = 0,
+  mean_intervention = 0.4,
+  sd_control = 1,
+  sd_intervention = 1,
+  iteration = 1:10
+)
+
+
+# run simulation ----
+simulation <- 
+  # using the experiment parameters
+  experiment_parameters_grid |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n_control,
+                                    n_intervention,
+                                    mean_control,
+                                    mean_intervention,
+                                    sd_control,
+                                    sd_intervention),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results = pmap(list(generated_data),
+                                 analyse_data))
+  
+
+# summarise simulation results over the iterations ----
+simulation_summary <- simulation |>
+  # convert `analysis_results` nested-data-frame column to regular columns in the df. in this case, the p value.
+  unnest(generated_data) |>
+  summarize(mean = mean(score),
+            sd = sd(score),
+            .by = c(iteration, condition)) 
+
+ggplot(simulation_summary, aes(mean, sd)) +
+  geom_point() +
+  facet_wrap(~ condition)
+
+simulation_summary2 <- simulation_summary |>
+  summarize(mean_mean = mean(mean),
+            sd_mean = sd(mean),
+            min_mean = min(mean),
+            max_mean = max(mean),
+            mean_sd = mean(sd),
+            sd_sd = sd(sd),
+            min_sd = min(sd),
+            max_sd = max(sd),
+            cor_mean_sd = cor(mean, sd),
+            .by = condition) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 2)
+
+
+d_upper_extreme_sd <- 0.4 / 1.30
+d_lower_extreme_sd <- 0.4 / 0.70
+
+d_upper_extreme_sd
+d_lower_extreme_sd
+
+```
+
+\TODO do some curve fitting on real BDI data to figure out its distribution, e.g., negative binomial or poisson, with or without zero inflation. eg maybe using:
+
+```{r}
+
+library(pscl)
+
+# Assuming 'data' is your BDI-II scores
+# Fit a ZIP model
+zip_model <- zeroinfl(Score ~ 1, data = data, dist = "negbin")
+
+# Summary of the fitted model
+summary(zip_model)
+
+
+```
+
+
+# Wrapping up
+
+\TODO summarize above
+
+\TODO add an exercise for home. Eg examine p values for correlated data, and have them work with mvrnorm(). And/or show that true positive rate increases with increasing sample size too, assuming static effect sizes.
+
+# Session info
+
+```{r}
+
+sessionInfo()
+
+```
+
+
