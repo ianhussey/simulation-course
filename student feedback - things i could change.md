@@ -67,3 +67,7 @@ interpreting RCTs:
 - add paper on interpretation of nonsignificant results to reading list before class
 - mention equivalence tests?
 - quiz for checking understanding?
+
+
+
+General: change tutorial to lesson throughout
