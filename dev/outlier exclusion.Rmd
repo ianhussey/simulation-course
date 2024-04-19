@@ -1,0 +1,5 @@
+note recent paper on not excluding EEG data
+
+note conceptual work on how extremity is not a reason by itself for excluding data
+
+compare different strategies, note power trade offs as N is decreased.
