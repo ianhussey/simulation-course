@@ -3,3 +3,60 @@ note recent paper on not excluding EEG data
 note conceptual work on how extremity is not a reason by itself for excluding data
 
 compare different strategies, note power trade offs as N is decreased.
+
+
+what proportion is excluded based on common strategies?
+
+```{r}
+
+# Define the number of simulations and the sample size per simulation
+n_simulations <- 10000
+sample_size <- 10000
+
+# Define thresholds for standard deviation
+thresholds <- c(2, 2.5, 3)
+
+# Initialize a matrix to store the results for SD thresholds
+results_sd <- matrix(0, nrow = n_simulations, ncol = length(thresholds))
+
+# Initialize a vector to store the results for IQR outlier detection
+results_iqr <- numeric(n_simulations)
+
+# Simulation loop
+for (i in 1:n_simulations) {
+  # Generate random normal data
+  data <- rnorm(sample_size, mean = 0, sd = 1)
+  
+  # Calculate proportions for each standard deviation threshold
+  for (j in 1:length(thresholds)) {
+    results_sd[i, j] <- mean(abs(data) > thresholds[j])
+  }
+  
+  # Calculate IQR and identify outliers
+  Q1 <- quantile(data, 0.25)
+  Q3 <- quantile(data, 0.75)
+  IQR <- Q3 - Q1
+  lower_bound <- Q1 - 1.5 * IQR
+  upper_bound <- Q3 + 1.5 * IQR
+  results_iqr[i] <- mean(data < lower_bound | data > upper_bound)
+}
+
+# Calculate average proportions across all simulations for SD thresholds
+average_proportions_sd <- colMeans(results_sd)
+names(average_proportions_sd) <- paste("More than", thresholds, "SDs")
+
+# Calculate average proportion of IQR outliers
+average_proportion_iqr <- mean(results_iqr)
+
+# Print results for standard deviation based thresholds
+print("Proportion excluded by SD methods:")
+average_proportions_sd |> round(2)
+
+# Print results for IQR based outlier detection
+print(paste("Proportion excluded by IQR method:", round(average_proportion_iqr, 2)))
+
+
+```
+
+
+
