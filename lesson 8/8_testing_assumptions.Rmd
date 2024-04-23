@@ -80,7 +80,11 @@ rsn(n = 100000,
 
 ## Power of Kolmogov-Smirnov test with skew-normal data
 
-The assumption of normality can be assessed using multiple tests, including the Kolmogov-Smirnov test. This test assesses whether two distributions follow the same distribution. When used to assess normality, this test uses the Mean and SD of the observed data to create the second distribution (i.e., a normal distribution with the same M and SD). It is known to have low power. Let's demonstrate this, and then later determine if an alternative test, the Shapiro-Wilk's test, is superior. 
+The assumption of normality can be assessed using multiple tests, including the Kolmogov-Smirnov test. This test assesses whether two distributions come from the same distribution. It is known to have low power: ie in low sample sizes, this test seldomly correctly detects when the two samples come from different distributions.
+
+Slightly confusingly, although the tests compares two samples, it can also be used to test *one* sample for normality by comparing the one *observed* sample with a second hypothetical perfectly normal distribution.  
+
+Let's demonstrate that the test does indeed have low power before we move on to an alternative test.
 
 ### In a single sample
 
