@@ -24,7 +24,7 @@ Why? What benefits are there for doing so? Or what bad things happen if you don'
 In a previous session, we observed that violations of the assumption of normality actually has very little impact on the statistical power of a t-test, as long as the two conditions have similarly non-normal data, which is plausible in many situations. Of course, non-normality does distort estimates of population parameters and standardized effect sizes - but often not the p values themselves. This lesson seeks to answer two related questions:
 
 1. Just like hypothesis tests, assumptions tests are just inferential tests of other properties (e.g., differences in SDs rather than differences in means), and as such they have false-positive rates and false-negative rates (statistical power). What is the power of these tests under different degrees of violations of assumptions? I.e. what proportion of the time do they get it wrong?
-2. What is the aggregate benefit of choosing a hypothesis test based on the results of assumption tests? This multi-step researcher behavior can itself be simulated/  
+2. What is the aggregate benefit of choosing a hypothesis test based on the results of assumption tests? This multi-step researcher behavior can itself be simulated. 
 
 # Assumption of normality
 
@@ -1126,6 +1126,14 @@ simulation_summary |>
 - Increases in statistical power for conditional use of tests is relatively small.
 - However, note that this doesn't consider distortions in effect size due to non-normality, or the conditional calculation or interpretation of non-parametric effect sizes (e.g., Ruscio's A, the rank-biserial correlation, etc). We don't assess these things in these simulations, but you should be aware of that these violations can have impacts on things other than false-positive rates and statistical power. 
 - We also don't assess the change in false-positive rates/statistical power across different sample sizes, only degrees of violations of assumptions. This would also be important to understand in a more complete simulation.
+
+# Further reading
+
+The above simulations still treat "t-test" and "Mann-Whitney U tests" as if they are totally different things, rather than both instances of linear models, one with a transformation applied to it. This is a general problem in the way psychologists get taught statistics: we learn about tests that have the names of their creators, rather than the underlying relationships between them. Jonas has an excellent website called [Common statistical tests are linear models](https://lindeloev.github.io/tests-as-linear/) that I strongly recommend you read and think about - it completely changed the way I understand parametric vs. non-parametric tests, the relationships between named tests, and the linear model. The cheat-sheet at the top of the website is also available as a pdf in this week's materials.
+
+For example, an independent t-test is implemented in R as `t.test(score ~ group`, but this is equivalent to running a linear model (linear regression) using `lm(score ~ 1 + group)`. Equally, the non-parametric version of a t-test, the Mann-Whitney U test (aka Wilcoxon Signed-Rank test), is implemented as `wilcox.test(score ~ group`. However, it is equivalent to running this a linear model on the sign-ranked outcome: `lm(signed_rank(score) ~ 1 + group)`. 
+
+Seeing (a) common statistical tests as linear models and (b) most common non-parametric versions of these tests as merely the same test run on the ranked data helps you see its all related.
 
 # Session info
 
