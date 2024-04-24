@@ -71,3 +71,27 @@ interpreting RCTs:
 
 
 General: change tutorial to lesson throughout
+
+
+
+
+
+Talk about the Data Generating Signal more and earlier
+
+
+
+REORDER WEEKS
+
+homogenise YAML headers between scripts
+
+
+
+switch to quarto?
+
+
+
+lesson 8 - conditional use of non parametric tests
+
+- needs better summary of results - multiverse plot?
+- needs more material on white boarding, which was done in class.
+- homogenisie the data generating functions so all sims have location and scale for each group, so it doesn't unnecessarily change between them.
