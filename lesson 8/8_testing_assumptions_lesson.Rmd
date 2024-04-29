@@ -11,6 +11,21 @@ output:
     toc_float: yes
 ---
 
+
+```{r}
+
+library(tidyr)
+library(dplyr)
+library(forcats)
+library(readr)
+library(purrr) 
+library(ggplot2)
+library(sn)
+library(knitr)
+library(kableExtra)
+
+```
+
 # Overview
 
 What do most statistics textbooks tell you to do when trying to test if two groups' means differ?
@@ -466,7 +481,7 @@ analyse_data <- function(data) {
   assumption_test_intervention   <- shapiro.test(data$score[data$condition == "intervention"])
   assumption_test_control        <- shapiro.test(data$score[data$condition == "control"])
 
-  hypothesis_test_welches_t      <- t.test(formula = score ~ condition, 
+  hypothesis_test_students_t      <- t.test(formula = score ~ condition, 
                                       data = data,
                                       var.equal = TRUE,
                                       alternative = "two.sided")
@@ -478,12 +493,12 @@ analyse_data <- function(data) {
   results <- tibble(
     assumption_test_p_intervention = assumption_test_intervention$p.value, 
     assumption_test_p_control = assumption_test_control$p.value,
-    hypothesis_test_p_welches_t = hypothesis_test_welches_t$p.value, 
+    hypothesis_test_p_students_t = hypothesis_test_students_t$p.value, 
     hypothesis_test_p_mann_whitney_u = hypothesis_test_mann_whitney_u$p.value
   ) |>
     mutate(hypothesis_test_p_conditional = ifelse(min(assumption_test_p_intervention, assumption_test_p_control) < .05, 
                                                   hypothesis_test_p_mann_whitney_u,
-                                                  hypothesis_test_p_welches_t))
+                                                  hypothesis_test_p_students_t))
   
   return(results)
 }
@@ -529,7 +544,7 @@ simulation_summary <- simulation |>
            skew) |>
   summarize(power_assumption_test = mean(assumption_test_p_intervention < .05 | assumption_test_p_control < .05),
             power_u = mean(hypothesis_test_p_mann_whitney_u < .05),
-            power_t = mean(hypothesis_test_p_welches_t < .05),
+            power_t = mean(hypothesis_test_p_students_t < .05),
             power_u = mean(hypothesis_test_p_mann_whitney_u < .05),
             power_conditional = mean(hypothesis_test_p_conditional < .05),
             .groups = "drop") |>
