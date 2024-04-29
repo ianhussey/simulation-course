@@ -1,0 +1,448 @@
+---
+title: "A compendium of data tampering and fabrication strategies"
+author: "Ian Hussey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+# Ideas 
+
+## For types of tampering and fabrication
+
+- unwarranted dropping of cases [done]
+- swapping conditions [done]
+- changing/offsetting existing cases
+- duplicating existing cases 
+- fabricating new cases [could take many many forms, would need thought. the question is how little of this is needed to produce significant results, and how much harder/more detectable/perceived acceptable is it to simply delete cases instead]
+- fabrication of full data set - doesn't need to be simulated, you can by definition make it give you whatever results you like.
+
+## For additional analyses
+
+- detectability of each form of tampering. not sure by what method, and don't want to derail the project into detectability either.
+
+## Ethics and optics 
+
+Think about the ethics and options of distributing this weaponisable knowledge. Are there ways to hide detectability in it? 
+
+Add explicit discussion about how arbitrary the line is between p-hacking (scientifically naughty) and fabrication (legally actionable): 
+
+- excluding some participants is usually seen as p-hacking, even if these exclusions are totally unjustifiable and unprincipled, and seem to just be done to produce significant p values.
+- but if instead of clicking the delete key on those rows you instead type the other condition name in, suddenly its fabrication and you could lose your job over it.
+- the idea that one of these is common and one of these is rare, or one of these is merely iffy and the other is Clearly Unacceptable, risks underestimating the prevalence of the latter.
+- as usual, this boils down to a Trolly Problem: is deleting data really ethically different from making up data, if both serve the individuals' self-advancement at the expense of undermining the integrity of the research and the validity of the evidence? 
+
+# Simulations
+
+## Unwarranted data exclusion
+
+```{r fig.height=25, fig.width=7}
+
+# remove all objects from environment ----
+#rm(list = ls())
+
+
+# dependencies ----
+# repeated here for the sake of completeness 
+
+library(tidyr)
+library(dplyr)
+library(purrr) 
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(janitor)
+
+
+# set the seed ----
+# for the pseudo random number generator to make results reproducible
+set.seed(123)
+
+
+# define data generating function ----
+generate_data <- function(n_per_condition,
+                          mean_control,
+                          mean_intervention,
+                          sd_control,
+                          sd_intervention) {
+  
+  data_control <- 
+    tibble(condition = "control",
+           score = rnorm(n = n_per_condition, mean = mean_control, sd = sd_control))
+  
+  data_intervention <- 
+    tibble(condition = "intervention",
+           score = rnorm(n = n_per_condition, mean = mean_intervention, sd = sd_intervention))
+  
+  data <- bind_rows(data_control,
+                    data_intervention) 
+  
+  return(data)
+}
+
+alter_data <- function(data, n_participants_dropped_per_condition) {
+  
+  data <- data |>
+    rownames_to_column(var = "rowname") |>
+    mutate(altered = FALSE)
+  
+  # identify the N smallest scores in the intervention group
+  smallest_intervention <- data |>
+    filter(condition == "intervention") |>
+    arrange(score) |>
+    slice_head(n = n_participants_dropped_per_condition)
+  
+  # identify the N largest scores in the control group
+  largest_control <- data |>
+    filter(condition == "control") |>
+    arrange(desc(score)) |>
+    slice_head(n = n_participants_dropped_per_condition)
+  
+  # swap conditions: smallest intervention scores get 'control', largest control scores get 'intervention'
+  data$condition[data$rowname %in% smallest_intervention$rowname] <- "control"
+  data$condition[data$rowname %in% largest_control$rowname] <- "intervention"
+  
+  # set 'altered' to TRUE for these rows, and set score to NA
+  drop_indexes <- c(smallest_intervention$rowname, largest_control$rowname)
+  data$altered[data$rowname %in% drop_indexes] <- TRUE
+  data$score[data$rowname %in% drop_indexes] <- NA
+  
+  # remove the rowname column which isn't needed
+  data <- data %>%
+    select(-rowname)
+  
+  return(data)
+}
+
+
+# define data analysis function ----
+analyse_data <- function(data) {
+
+  res_t_test <- t.test(formula = score ~ condition, 
+                       data = data,
+                       var.equal = FALSE,
+                       alternative = "two.sided")
+  
+  res <- tibble(p = res_t_test$p.value)
+  
+  return(res)
+}
+
+
+# define experiment parameters ----
+experiment_parameters_grid <- expand_grid(
+  n_per_condition = c(10, seq(from = 25, to = 200, by = 25)),
+  mean_control = 0,
+  mean_intervention = 0, 
+  sd_control = 1,
+  sd_intervention = 1,
+  n_participants_dropped_per_condition = c(1, 2, 3, 4, 5),
+  iteration = 1:1000
+)
+
+
+# run simulation ----
+simulation <- 
+  # using the experiment parameters
+  experiment_parameters_grid |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n_per_condition,
+                                    mean_control,
+                                    mean_intervention,
+                                    sd_control,
+                                    sd_intervention),
+                               generate_data)) |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(altered_data = pmap(list(generated_data,
+                                  n_participants_dropped_per_condition),
+                             alter_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results_original_data = pmap(list(generated_data),
+                                               analyse_data),
+         analysis_results_altered_data = pmap(list(altered_data),
+                                              analyse_data))
+
+write_rds(simulation, "simulation_unwarranted_data_exclusion.rds", compress = "gz")
+
+```
+
+Illustrate swaps between conditions
+
+```{r}
+
+simulation <- read_rds("simulation_unwarranted_data_exclusion.rds")
+
+iteration <- 22
+
+left_join(
+  simulation$generated_data[[iteration]],
+  simulation$altered_data[[iteration]]
+) |>
+  mutate(altered = ifelse(is.na(altered), TRUE, altered)) |>
+  ggplot(aes(condition, score, color = altered)) +
+  geom_point(position = position_jitter(width = 0.1)) +
+  scale_color_viridis_d(begin = 0.3, end = 0.7) +
+  theme_linedraw()
+
+bind_cols(
+  simulation$analysis_results_original_data[[iteration]] |>
+    rename(p_original = p),
+  simulation$analysis_results_altered_data[[iteration]] |>
+    rename(p_altered = p),
+) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 3) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+Summarize results 
+
+```{r}
+
+# summarise simulation results over the iterations ----
+simulation_summary <- simulation |>
+  # convert `analysis_results` nested-data-frame column to regular columns in the df. in this case, the p value.
+  unnest(analysis_results_original_data) |>
+  rename(p_original_data = p) |>
+  unnest(analysis_results_altered_data) |>
+  rename(p_altered_data = p) |>
+  # summarize across iterations
+  group_by(n_per_condition, n_participants_dropped_per_condition) |>
+  summarize(original_data_false_positive_rate = mean(p_original_data < .05),
+            altered_data_false_positive_rate = mean(p_altered_data < .05))
+
+simulation_summary |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 2) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+simulation_summary |>
+  filter(n_participants_dropped_per_condition == 1) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 2) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+simulation_summary |>
+  filter(n_participants_dropped_per_condition == 5) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 2) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+## Condition switching
+
+```{r fig.height=25, fig.width=7}
+
+# remove all objects from environment ----
+#rm(list = ls())
+
+
+# dependencies ----
+# repeated here for the sake of completeness 
+
+library(tidyr)
+library(dplyr)
+library(purrr) 
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(janitor)
+
+
+# set the seed ----
+# for the pseudo random number generator to make results reproducible
+set.seed(123)
+
+
+# define data generating function ----
+generate_data <- function(n_per_condition,
+                          mean_control,
+                          mean_intervention,
+                          sd_control,
+                          sd_intervention) {
+  
+  data_control <- 
+    tibble(condition = "control",
+           score = rnorm(n = n_per_condition, mean = mean_control, sd = sd_control))
+  
+  data_intervention <- 
+    tibble(condition = "intervention",
+           score = rnorm(n = n_per_condition, mean = mean_intervention, sd = sd_intervention))
+  
+  data <- bind_rows(data_control,
+                    data_intervention) 
+  
+  return(data)
+}
+
+alter_data <- function(data, n_participants_swapped_per_condition) {
+  
+  data <- data |>
+    rownames_to_column(var = "rowname") |>
+    mutate(altered = FALSE)
+  
+  # identify the N smallest scores in the intervention group
+  smallest_intervention <- data |>
+    filter(condition == "intervention") |>
+    arrange(score) |>
+    slice_head(n = n_participants_swapped_per_condition)
+  
+  # identify the N largest scores in the control group
+  largest_control <- data |>
+    filter(condition == "control") |>
+    arrange(desc(score)) |>
+    slice_head(n = n_participants_swapped_per_condition)
+  
+  # swap conditions: smallest intervention scores get 'control', largest control scores get 'intervention'
+  data$condition[data$rowname %in% smallest_intervention$rowname] <- "control"
+  data$condition[data$rowname %in% largest_control$rowname] <- "intervention"
+  
+  # set 'altered' to TRUE for these rows
+  altered_indexes <- c(smallest_intervention$rowname, largest_control$rowname)
+  data$altered[data$rowname %in% altered_indexes] <- TRUE
+  
+  # remove the rowname column which isn't needed
+  data <- data %>%
+    select(-rowname)
+  
+  return(data)
+}
+
+
+# define data analysis function ----
+analyse_data <- function(data) {
+
+  res_t_test <- t.test(formula = score ~ condition, 
+                       data = data,
+                       var.equal = FALSE,
+                       alternative = "two.sided")
+  
+  res <- tibble(p = res_t_test$p.value)
+  
+  return(res)
+}
+
+
+# define experiment parameters ----
+experiment_parameters_grid <- expand_grid(
+  n_per_condition = c(10, seq(from = 25, to = 200, by = 25)),
+  mean_control = 0,
+  mean_intervention = 0, 
+  sd_control = 1,
+  sd_intervention = 1,
+  n_participants_swapped_per_condition = c(1, 2, 3, 4, 5),
+  iteration = 1:1000
+)
+
+
+# run simulation ----
+simulation <- 
+  # using the experiment parameters
+  experiment_parameters_grid |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n_per_condition,
+                                    mean_control,
+                                    mean_intervention,
+                                    sd_control,
+                                    sd_intervention),
+                               generate_data)) |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(altered_data = pmap(list(generated_data,
+                                  n_participants_swapped_per_condition),
+                             alter_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results_original_data = pmap(list(generated_data),
+                                               analyse_data),
+         analysis_results_altered_data = pmap(list(altered_data),
+                                              analyse_data))
+
+write_rds(simulation, "simulation_condition_switching.rds", compress = "gz")
+
+```
+
+Illustrate swaps between conditions
+
+```{r}
+
+simulation <- read_rds("simulation_condition_switching.rds")
+
+iteration <- 23
+
+ggplot(simulation$altered_data[[iteration]], aes(condition, score, color = altered)) +
+  geom_point(position = position_jitter(width = 0.1)) +
+  scale_color_viridis_d(begin = 0.3, end = 0.7) +
+  theme_linedraw()
+
+bind_cols(
+  simulation$analysis_results_original_data[[iteration]] |>
+    rename(p_original = p),
+  simulation$analysis_results_altered_data[[iteration]] |>
+    rename(p_altered = p),
+) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 3) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+Summarize results 
+
+```{r}
+
+# summarise simulation results over the iterations ----
+simulation_summary <- simulation |>
+  # convert `analysis_results` nested-data-frame column to regular columns in the df. in this case, the p value.
+  unnest(analysis_results_original_data) |>
+  rename(p_original_data = p) |>
+  unnest(analysis_results_altered_data) |>
+  rename(p_altered_data = p) |>
+  # summarize across iterations
+  group_by(n_per_condition, n_participants_swapped_per_condition) |>
+  summarize(original_data_false_positive_rate = mean(p_original_data < .05),
+            altered_data_false_positive_rate = mean(p_altered_data < .05))
+
+simulation_summary |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 2) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+simulation_summary |>
+  filter(n_participants_swapped_per_condition == 1) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 2) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+simulation_summary |>
+  filter(n_participants_swapped_per_condition == 5) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 2) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+## Changing/offsetting existing cases
+
+The idea here would be to modify a small number of the most extreme cases within each condition (same as the above two simulations) by a small amount (e.g., 0.2 SDs, but could vary) to see how much of this modification is needed to change the results. How to square this with how fraud has been observed to occur? Eg Gino's data seems to move people by a lot, not a little: allegedly altered data appears as the most extreme data in the final data set. This could also be a simulation: change data at one extreme end to be at the other extreme end instead. These simulations would need to explicate how elaborate the faking and its detectability is when studying this. Perhaps with citation of existing alleged fraud cases and what was observed there.
+
+# Session info
+
+```{r}
+
+sessionInfo()
+
+```
+
+
