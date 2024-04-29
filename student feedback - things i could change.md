@@ -8,6 +8,10 @@ discussion of expand_grid was also helpful to show what its really doing and why
 
 
 
+the "summarise across iterations" part of the core components needs to have discussion of the necessary allignment between the conditions simultated and the group_by summary
+
+
+
 general discussion was needed for people to get it.
 
 
@@ -95,3 +99,5 @@ lesson 8 - conditional use of non parametric tests
 - needs better summary of results - multiverse plot?
 - needs more material on white boarding, which was done in class.
 - homogenisie the data generating functions so all sims have location and scale for each group, so it doesn't unnecessarily change between them.
+- - four pathways through the analysis: just to the H, do the A and ignore it then H, do H conditoinal on A, and do H but report A as a caution
+  - 
