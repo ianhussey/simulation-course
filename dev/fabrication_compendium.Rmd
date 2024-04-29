@@ -1,15 +1,36 @@
 ---
 title: "A compendium of data tampering and fabrication strategies"
+subtitle: "And the relative degree to which their minimal application inflates the false positive rate of an independent Student's t-test"
 author: "Ian Hussey"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
   html_document:
-    code_folding: show
+    code_folding: hide
     highlight: haddock
     theme: flatly
     toc: yes
     toc_float: yes
 ---
+
+```{r, include=FALSE}
+
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+
+```
+
+```{r}
+
+library(tidyr)
+library(dplyr)
+library(readr)
+library(purrr) 
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(janitor)
+
+```
 
 # Ideas 
 
@@ -43,134 +64,126 @@ Add explicit discussion about how arbitrary the line is between p-hacking (scien
 
 ```{r fig.height=25, fig.width=7}
 
-# remove all objects from environment ----
-#rm(list = ls())
-
-
-# dependencies ----
-# repeated here for the sake of completeness 
-
-library(tidyr)
-library(dplyr)
-library(purrr) 
-library(ggplot2)
-library(knitr)
-library(kableExtra)
-library(janitor)
-
-
-# set the seed ----
-# for the pseudo random number generator to make results reproducible
-set.seed(123)
-
-
-# define data generating function ----
-generate_data <- function(n_per_condition,
-                          mean_control,
-                          mean_intervention,
-                          sd_control,
-                          sd_intervention) {
+if(file.exists("simulation_unwarranted_data_exclusion.rds")){
   
-  data_control <- 
-    tibble(condition = "control",
-           score = rnorm(n = n_per_condition, mean = mean_control, sd = sd_control))
+  simulation_unwarranted_data_exclusion <- read_rds("simulation_unwarranted_data_exclusion.rds")
   
-  data_intervention <- 
-    tibble(condition = "intervention",
-           score = rnorm(n = n_per_condition, mean = mean_intervention, sd = sd_intervention))
+} else {
   
-  data <- bind_rows(data_control,
-                    data_intervention) 
+  # set the seed ----
+  # for the pseudo random number generator to make results reproducible
+  set.seed(123)
   
-  return(data)
+  
+  # define data generating function ----
+  generate_data <- function(n_per_condition,
+                            mean_control,
+                            mean_intervention,
+                            sd_control,
+                            sd_intervention) {
+    
+    data_control <- 
+      tibble(condition = "control",
+             score = rnorm(n = n_per_condition, mean = mean_control, sd = sd_control))
+    
+    data_intervention <- 
+      tibble(condition = "intervention",
+             score = rnorm(n = n_per_condition, mean = mean_intervention, sd = sd_intervention))
+    
+    data <- bind_rows(data_control,
+                      data_intervention) 
+    
+    return(data)
+  }
+  
+  alter_data <- function(data, n_participants_dropped_per_condition) {
+    
+    data <- data |>
+      rownames_to_column(var = "rowname") |>
+      mutate(altered = FALSE)
+    
+    # identify the N smallest scores in the intervention group
+    smallest_intervention <- data |>
+      filter(condition == "intervention") |>
+      arrange(score) |>
+      slice_head(n = n_participants_dropped_per_condition)
+    
+    # identify the N largest scores in the control group
+    largest_control <- data |>
+      filter(condition == "control") |>
+      arrange(desc(score)) |>
+      slice_head(n = n_participants_dropped_per_condition)
+    
+    # swap conditions: smallest intervention scores get 'control', largest control scores get 'intervention'
+    data$condition[data$rowname %in% smallest_intervention$rowname] <- "control"
+    data$condition[data$rowname %in% largest_control$rowname] <- "intervention"
+    
+    # set 'altered' to TRUE for these rows, and set score to NA
+    drop_indexes <- c(smallest_intervention$rowname, largest_control$rowname)
+    data$altered[data$rowname %in% drop_indexes] <- TRUE
+    data$score[data$rowname %in% drop_indexes] <- NA
+    
+    # remove the rowname column which isn't needed
+    data <- data %>%
+      select(-rowname)
+    
+    return(data)
+  }
+  
+  
+  # define data analysis function ----
+  analyse_data <- function(data) {
+    
+    res_t_test <- t.test(formula = score ~ condition, 
+                         data = data,
+                         var.equal = TRUE,
+                         alternative = "two.sided")
+    
+    res <- tibble(p = res_t_test$p.value)
+    
+    return(res)
+  }
+  
+  
+  # define experiment parameters ----
+  experiment_parameters_grid <- expand_grid(
+    n_per_condition = c(10, seq(from = 25, to = 200, by = 25)),
+    mean_control = 0,
+    mean_intervention = 0, 
+    sd_control = 1,
+    sd_intervention = 1,
+    n_participants_dropped_per_condition = c(1, 2, 3, 4, 5),
+    iteration = 1:1000
+  )
+  
+  
+  # run simulation ----
+  simulation_unwarranted_data_exclusion <- 
+    # using the experiment parameters
+    experiment_parameters_grid |>
+    
+    # generate data using the data generating function and the parameters relevant to data generation
+    mutate(generated_data = pmap(list(n_per_condition,
+                                      mean_control,
+                                      mean_intervention,
+                                      sd_control,
+                                      sd_intervention),
+                                 generate_data)) |>
+    
+    # generate data using the data generating function and the parameters relevant to data generation
+    mutate(altered_data = pmap(list(generated_data,
+                                    n_participants_dropped_per_condition),
+                               alter_data)) |>
+    
+    # apply the analysis function to the generated data using the parameters relevant to analysis
+    mutate(analysis_results_original_data = pmap(list(generated_data),
+                                                 analyse_data),
+           analysis_results_altered_data = pmap(list(altered_data),
+                                                analyse_data))
+  
+  write_rds(simulation_unwarranted_data_exclusion, "simulation_unwarranted_data_exclusion.rds", compress = "gz")
+  
 }
-
-alter_data <- function(data, n_participants_dropped_per_condition) {
-  
-  data <- data |>
-    rownames_to_column(var = "rowname") |>
-    mutate(altered = FALSE)
-  
-  # identify the N smallest scores in the intervention group
-  smallest_intervention <- data |>
-    filter(condition == "intervention") |>
-    arrange(score) |>
-    slice_head(n = n_participants_dropped_per_condition)
-  
-  # identify the N largest scores in the control group
-  largest_control <- data |>
-    filter(condition == "control") |>
-    arrange(desc(score)) |>
-    slice_head(n = n_participants_dropped_per_condition)
-  
-  # swap conditions: smallest intervention scores get 'control', largest control scores get 'intervention'
-  data$condition[data$rowname %in% smallest_intervention$rowname] <- "control"
-  data$condition[data$rowname %in% largest_control$rowname] <- "intervention"
-  
-  # set 'altered' to TRUE for these rows, and set score to NA
-  drop_indexes <- c(smallest_intervention$rowname, largest_control$rowname)
-  data$altered[data$rowname %in% drop_indexes] <- TRUE
-  data$score[data$rowname %in% drop_indexes] <- NA
-  
-  # remove the rowname column which isn't needed
-  data <- data %>%
-    select(-rowname)
-  
-  return(data)
-}
-
-
-# define data analysis function ----
-analyse_data <- function(data) {
-
-  res_t_test <- t.test(formula = score ~ condition, 
-                       data = data,
-                       var.equal = FALSE,
-                       alternative = "two.sided")
-  
-  res <- tibble(p = res_t_test$p.value)
-  
-  return(res)
-}
-
-
-# define experiment parameters ----
-experiment_parameters_grid <- expand_grid(
-  n_per_condition = c(10, seq(from = 25, to = 200, by = 25)),
-  mean_control = 0,
-  mean_intervention = 0, 
-  sd_control = 1,
-  sd_intervention = 1,
-  n_participants_dropped_per_condition = c(1, 2, 3, 4, 5),
-  iteration = 1:1000
-)
-
-
-# run simulation ----
-simulation <- 
-  # using the experiment parameters
-  experiment_parameters_grid |>
-  
-  # generate data using the data generating function and the parameters relevant to data generation
-  mutate(generated_data = pmap(list(n_per_condition,
-                                    mean_control,
-                                    mean_intervention,
-                                    sd_control,
-                                    sd_intervention),
-                               generate_data)) |>
-  
-  # generate data using the data generating function and the parameters relevant to data generation
-  mutate(altered_data = pmap(list(generated_data,
-                                  n_participants_dropped_per_condition),
-                             alter_data)) |>
-  
-  # apply the analysis function to the generated data using the parameters relevant to analysis
-  mutate(analysis_results_original_data = pmap(list(generated_data),
-                                               analyse_data),
-         analysis_results_altered_data = pmap(list(altered_data),
-                                              analyse_data))
-
-write_rds(simulation, "simulation_unwarranted_data_exclusion.rds", compress = "gz")
 
 ```
 
@@ -178,13 +191,11 @@ Illustrate swaps between conditions
 
 ```{r}
 
-simulation <- read_rds("simulation_unwarranted_data_exclusion.rds")
-
-iteration <- 22
+iteration <- 87
 
 left_join(
-  simulation$generated_data[[iteration]],
-  simulation$altered_data[[iteration]]
+  simulation_unwarranted_data_exclusion$generated_data[[iteration]],
+  simulation_unwarranted_data_exclusion$altered_data[[iteration]]
 ) |>
   mutate(altered = ifelse(is.na(altered), TRUE, altered)) |>
   ggplot(aes(condition, score, color = altered)) +
@@ -193,9 +204,9 @@ left_join(
   theme_linedraw()
 
 bind_cols(
-  simulation$analysis_results_original_data[[iteration]] |>
+  simulation_unwarranted_data_exclusion$analysis_results_original_data[[iteration]] |>
     rename(p_original = p),
-  simulation$analysis_results_altered_data[[iteration]] |>
+  simulation_unwarranted_data_exclusion$analysis_results_altered_data[[iteration]] |>
     rename(p_altered = p),
 ) |>
   mutate_if(is.numeric, janitor::round_half_up, digits = 3) |>
@@ -209,7 +220,7 @@ Summarize results
 ```{r}
 
 # summarise simulation results over the iterations ----
-simulation_summary <- simulation |>
+simulation_unwarranted_data_exclusion_summary <- simulation_unwarranted_data_exclusion |>
   # convert `analysis_results` nested-data-frame column to regular columns in the df. in this case, the p value.
   unnest(analysis_results_original_data) |>
   rename(p_original_data = p) |>
@@ -220,18 +231,18 @@ simulation_summary <- simulation |>
   summarize(original_data_false_positive_rate = mean(p_original_data < .05),
             altered_data_false_positive_rate = mean(p_altered_data < .05))
 
-simulation_summary |>
+simulation_unwarranted_data_exclusion_summary |>
   mutate_if(is.numeric, janitor::round_half_up, digits = 2) |>
   kable() |>
   kable_classic(full_width = FALSE)
 
-simulation_summary |>
+simulation_unwarranted_data_exclusion_summary |>
   filter(n_participants_dropped_per_condition == 1) |>
   mutate_if(is.numeric, janitor::round_half_up, digits = 2) |>
   kable() |>
   kable_classic(full_width = FALSE)
 
-simulation_summary |>
+simulation_unwarranted_data_exclusion_summary |>
   filter(n_participants_dropped_per_condition == 5) |>
   mutate_if(is.numeric, janitor::round_half_up, digits = 2) |>
   kable() |>
@@ -243,133 +254,125 @@ simulation_summary |>
 
 ```{r fig.height=25, fig.width=7}
 
-# remove all objects from environment ----
-#rm(list = ls())
-
-
-# dependencies ----
-# repeated here for the sake of completeness 
-
-library(tidyr)
-library(dplyr)
-library(purrr) 
-library(ggplot2)
-library(knitr)
-library(kableExtra)
-library(janitor)
-
-
-# set the seed ----
-# for the pseudo random number generator to make results reproducible
-set.seed(123)
-
-
-# define data generating function ----
-generate_data <- function(n_per_condition,
-                          mean_control,
-                          mean_intervention,
-                          sd_control,
-                          sd_intervention) {
+if(file.exists("simulation_condition_switching.rds")){
   
-  data_control <- 
-    tibble(condition = "control",
-           score = rnorm(n = n_per_condition, mean = mean_control, sd = sd_control))
+  simulation_condition_switching <- read_rds("simulation_condition_switching.rds")
   
-  data_intervention <- 
-    tibble(condition = "intervention",
-           score = rnorm(n = n_per_condition, mean = mean_intervention, sd = sd_intervention))
+} else {
   
-  data <- bind_rows(data_control,
-                    data_intervention) 
+  # set the seed ----
+  # for the pseudo random number generator to make results reproducible
+  set.seed(123)
   
-  return(data)
+  
+  # define data generating function ----
+  generate_data <- function(n_per_condition,
+                            mean_control,
+                            mean_intervention,
+                            sd_control,
+                            sd_intervention) {
+    
+    data_control <- 
+      tibble(condition = "control",
+             score = rnorm(n = n_per_condition, mean = mean_control, sd = sd_control))
+    
+    data_intervention <- 
+      tibble(condition = "intervention",
+             score = rnorm(n = n_per_condition, mean = mean_intervention, sd = sd_intervention))
+    
+    data <- bind_rows(data_control,
+                      data_intervention) 
+    
+    return(data)
+  }
+  
+  alter_data <- function(data, n_participants_swapped_per_condition) {
+    
+    data <- data |>
+      rownames_to_column(var = "rowname") |>
+      mutate(altered = FALSE)
+    
+    # identify the N smallest scores in the intervention group
+    smallest_intervention <- data |>
+      filter(condition == "intervention") |>
+      arrange(score) |>
+      slice_head(n = n_participants_swapped_per_condition)
+    
+    # identify the N largest scores in the control group
+    largest_control <- data |>
+      filter(condition == "control") |>
+      arrange(desc(score)) |>
+      slice_head(n = n_participants_swapped_per_condition)
+    
+    # swap conditions: smallest intervention scores get 'control', largest control scores get 'intervention'
+    data$condition[data$rowname %in% smallest_intervention$rowname] <- "control"
+    data$condition[data$rowname %in% largest_control$rowname] <- "intervention"
+    
+    # set 'altered' to TRUE for these rows
+    altered_indexes <- c(smallest_intervention$rowname, largest_control$rowname)
+    data$altered[data$rowname %in% altered_indexes] <- TRUE
+    
+    # remove the rowname column which isn't needed
+    data <- data %>%
+      select(-rowname)
+    
+    return(data)
+  }
+  
+  
+  # define data analysis function ----
+  analyse_data <- function(data) {
+    
+    res_t_test <- t.test(formula = score ~ condition, 
+                         data = data,
+                         var.equal = TRUE,
+                         alternative = "two.sided")
+    
+    res <- tibble(p = res_t_test$p.value)
+    
+    return(res)
+  }
+  
+  
+  # define experiment parameters ----
+  experiment_parameters_grid <- expand_grid(
+    n_per_condition = c(10, seq(from = 25, to = 200, by = 25)),
+    mean_control = 0,
+    mean_intervention = 0, 
+    sd_control = 1,
+    sd_intervention = 1,
+    n_participants_swapped_per_condition = c(1, 2, 3, 4, 5),
+    iteration = 1:1000
+  )
+  
+  
+  # run simulation ----
+  simulation_condition_switching <- 
+    # using the experiment parameters
+    experiment_parameters_grid |>
+    
+    # generate data using the data generating function and the parameters relevant to data generation
+    mutate(generated_data = pmap(list(n_per_condition,
+                                      mean_control,
+                                      mean_intervention,
+                                      sd_control,
+                                      sd_intervention),
+                                 generate_data)) |>
+    
+    # generate data using the data generating function and the parameters relevant to data generation
+    mutate(altered_data = pmap(list(generated_data,
+                                    n_participants_swapped_per_condition),
+                               alter_data)) |>
+    
+    # apply the analysis function to the generated data using the parameters relevant to analysis
+    mutate(analysis_results_original_data = pmap(list(generated_data),
+                                                 analyse_data),
+           analysis_results_altered_data = pmap(list(altered_data),
+                                                analyse_data))
+  
+  write_rds(simulation_condition_switching, "simulation_condition_switching.rds", compress = "gz")
+  
 }
-
-alter_data <- function(data, n_participants_swapped_per_condition) {
-  
-  data <- data |>
-    rownames_to_column(var = "rowname") |>
-    mutate(altered = FALSE)
-  
-  # identify the N smallest scores in the intervention group
-  smallest_intervention <- data |>
-    filter(condition == "intervention") |>
-    arrange(score) |>
-    slice_head(n = n_participants_swapped_per_condition)
-  
-  # identify the N largest scores in the control group
-  largest_control <- data |>
-    filter(condition == "control") |>
-    arrange(desc(score)) |>
-    slice_head(n = n_participants_swapped_per_condition)
-  
-  # swap conditions: smallest intervention scores get 'control', largest control scores get 'intervention'
-  data$condition[data$rowname %in% smallest_intervention$rowname] <- "control"
-  data$condition[data$rowname %in% largest_control$rowname] <- "intervention"
-  
-  # set 'altered' to TRUE for these rows
-  altered_indexes <- c(smallest_intervention$rowname, largest_control$rowname)
-  data$altered[data$rowname %in% altered_indexes] <- TRUE
-  
-  # remove the rowname column which isn't needed
-  data <- data %>%
-    select(-rowname)
-  
-  return(data)
-}
-
-
-# define data analysis function ----
-analyse_data <- function(data) {
-
-  res_t_test <- t.test(formula = score ~ condition, 
-                       data = data,
-                       var.equal = FALSE,
-                       alternative = "two.sided")
-  
-  res <- tibble(p = res_t_test$p.value)
-  
-  return(res)
-}
-
-
-# define experiment parameters ----
-experiment_parameters_grid <- expand_grid(
-  n_per_condition = c(10, seq(from = 25, to = 200, by = 25)),
-  mean_control = 0,
-  mean_intervention = 0, 
-  sd_control = 1,
-  sd_intervention = 1,
-  n_participants_swapped_per_condition = c(1, 2, 3, 4, 5),
-  iteration = 1:1000
-)
-
-
-# run simulation ----
-simulation <- 
-  # using the experiment parameters
-  experiment_parameters_grid |>
-  
-  # generate data using the data generating function and the parameters relevant to data generation
-  mutate(generated_data = pmap(list(n_per_condition,
-                                    mean_control,
-                                    mean_intervention,
-                                    sd_control,
-                                    sd_intervention),
-                               generate_data)) |>
-  
-  # generate data using the data generating function and the parameters relevant to data generation
-  mutate(altered_data = pmap(list(generated_data,
-                                  n_participants_swapped_per_condition),
-                             alter_data)) |>
-  
-  # apply the analysis function to the generated data using the parameters relevant to analysis
-  mutate(analysis_results_original_data = pmap(list(generated_data),
-                                               analyse_data),
-         analysis_results_altered_data = pmap(list(altered_data),
-                                              analyse_data))
-
-write_rds(simulation, "simulation_condition_switching.rds", compress = "gz")
 
 ```
 
@@ -377,19 +380,17 @@ Illustrate swaps between conditions
 
 ```{r}
 
-simulation <- read_rds("simulation_condition_switching.rds")
-
 iteration <- 23
 
-ggplot(simulation$altered_data[[iteration]], aes(condition, score, color = altered)) +
+ggplot(simulation_condition_switching$altered_data[[iteration]], aes(condition, score, color = altered)) +
   geom_point(position = position_jitter(width = 0.1)) +
   scale_color_viridis_d(begin = 0.3, end = 0.7) +
   theme_linedraw()
 
 bind_cols(
-  simulation$analysis_results_original_data[[iteration]] |>
+  simulation_condition_switching$analysis_results_original_data[[iteration]] |>
     rename(p_original = p),
-  simulation$analysis_results_altered_data[[iteration]] |>
+  simulation_condition_switching$analysis_results_altered_data[[iteration]] |>
     rename(p_altered = p),
 ) |>
   mutate_if(is.numeric, janitor::round_half_up, digits = 3) |>
@@ -403,7 +404,7 @@ Summarize results
 ```{r}
 
 # summarise simulation results over the iterations ----
-simulation_summary <- simulation |>
+simulation_condition_switching_summary <- simulation_condition_switching |>
   # convert `analysis_results` nested-data-frame column to regular columns in the df. in this case, the p value.
   unnest(analysis_results_original_data) |>
   rename(p_original_data = p) |>
@@ -414,18 +415,18 @@ simulation_summary <- simulation |>
   summarize(original_data_false_positive_rate = mean(p_original_data < .05),
             altered_data_false_positive_rate = mean(p_altered_data < .05))
 
-simulation_summary |>
+simulation_condition_switching_summary |>
   mutate_if(is.numeric, janitor::round_half_up, digits = 2) |>
   kable() |>
   kable_classic(full_width = FALSE)
 
-simulation_summary |>
+simulation_condition_switching_summary |>
   filter(n_participants_swapped_per_condition == 1) |>
   mutate_if(is.numeric, janitor::round_half_up, digits = 2) |>
   kable() |>
   kable_classic(full_width = FALSE)
 
-simulation_summary |>
+simulation_condition_switching_summary |>
   filter(n_participants_swapped_per_condition == 5) |>
   mutate_if(is.numeric, janitor::round_half_up, digits = 2) |>
   kable() |>
