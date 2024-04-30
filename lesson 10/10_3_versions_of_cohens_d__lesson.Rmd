@@ -1,7 +1,7 @@
 ---
 title: "Not-so-standardized effect sizes"
 subtitle: "Versions of Cohen's *d* for dependent data"
-author: "Ian Hussey & Jamie Cummins"
+author: "Ian Hussey"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
   html_document:
@@ -671,7 +671,8 @@ parameters <-
 parameters |>
   pivot_longer(cols = everything(),
                names_to = "parameter",
-               values_to = "value")
+               values_to = "value") |>
+  knitr::kable()
 
 plot_different_dependent_cohens_ds(parameters)
 
@@ -696,7 +697,8 @@ parameters <-
 parameters |>
   pivot_longer(cols = everything(),
                names_to = "parameter",
-               values_to = "value")
+               values_to = "value") |>
+  knitr::kable()
 
 plot_different_dependent_cohens_ds(parameters)
 
@@ -721,7 +723,8 @@ parameters <-
 parameters |>
   pivot_longer(cols = everything(),
                names_to = "parameter",
-               values_to = "value")
+               values_to = "value") |>
+  knitr::kable()
 
 plot_different_dependent_cohens_ds(parameters)
 
@@ -746,7 +749,8 @@ parameters <-
 parameters |>
   pivot_longer(cols = everything(),
                names_to = "parameter",
-               values_to = "value")
+               values_to = "value") |>
+  knitr::kable()
 
 plot_different_dependent_cohens_ds(parameters)
 
