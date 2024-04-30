@@ -11,6 +11,22 @@ output:
     toc_float: yes
 ---
 
+```{r}
+
+# dependencies
+library(tidyr)
+library(dplyr)
+library(forcats)
+library(readr)
+library(purrr) 
+library(ggplot2)
+library(sn)
+library(knitr)
+library(kableExtra)
+library(car)
+
+```
+
 # Overview
 
 What do most statistics textbooks tell you to do when trying to test if two groups' means differ?
@@ -92,21 +108,6 @@ Note that the Barlett test can be implemented using `car::leveneTest(centre = "m
 
 # remove all objects from environment ----
 rm(list = ls())
-
-
-# dependencies ----
-# repeated here for the sake of completeness 
-
-library(tidyr)
-library(dplyr)
-library(forcats)
-library(readr)
-library(purrr) 
-library(ggplot2)
-library(sn)
-library(knitr)
-library(kableExtra)
-library(car)
 
 # set the seed ----
 # for the pseudo random number generator to make results reproducible
@@ -211,21 +212,6 @@ This simulation therefore attempts to mimic the rules that many statistics textb
 
 # remove all objects from environment ----
 rm(list = ls())
-
-
-# dependencies ----
-# repeated here for the sake of completeness 
-
-library(tidyr)
-library(dplyr)
-library(forcats)
-library(readr)
-library(purrr) 
-library(ggplot2)
-library(sn)
-library(knitr)
-library(kableExtra)
-library(car)
 
 # set the seed ----
 # for the pseudo random number generator to make results reproducible

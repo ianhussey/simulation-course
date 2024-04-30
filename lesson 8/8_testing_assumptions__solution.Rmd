@@ -1,0 +1,407 @@
+---
+title: "The statistical power of assumptions tests and the conditional use of non-parameteric tests"
+author: "Ian Hussey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+```{r}
+
+# dependencies
+library(tidyr)
+library(dplyr)
+library(forcats)
+library(readr)
+library(purrr) 
+library(ggplot2)
+library(sn)
+library(knitr)
+library(kableExtra)
+library(car)
+
+```
+
+# Overview
+
+What do most statistics textbooks tell you to do when trying to test if two groups' means differ?
+
+1. Check assumptions of an independent Student's t-test are met, e.g., normality of data and homogeneity of variances.
+2. If so, run an interpret an independent Student's t-test.
+3. If not, then perhaps perhaps either 'interpret results with caution' (which always feels vague) or run and interpret a non-parametric test instead.
+
+Why? What benefits are there for doing so? Or what bad things happen if you don't?
+
+In a previous session, we observed that violations of the assumption of normality actually has very little impact on the statistical power of a t-test, as long as the two conditions have similarly non-normal data, which is plausible in many situations. Of course, non-normality does distort estimates of population parameters and standardized effect sizes - but often not the p values themselves. This lesson seeks to answer two related questions:
+
+1. Just like hypothesis tests, assumptions tests are just inferential tests of other properties (e.g., differences in SDs rather than differences in means), and as such they have false-positive rates and false-negative rates (statistical power). What is the power of these tests under different degrees of violations of assumptions? I.e. what proportion of the time do they get it wrong?
+2. What is the aggregate benefit of choosing a hypothesis test based on the results of assumption tests? This multi-step researcher behavior can itself be simulated. 
+
+# Assignment
+
+Write the three data analysis functions for the below simulations, each of which is marked 'TODO'. 
+
+- The first simulation should merely tests the statistical power of Barlett's test for differences in SDs, which is used to test the assumption of homogeneity of variances. The data analysis function should extract a p value from the `leveneTest()` function. Code has already been provided to summarize the results: use this existing code to determine what variable names you should use (e.g., `assumption_test_homogeneity_p`).
+- The second simulation should calculate the p value from the Bartlett test, and also *both* a **Student's** *t*-test and a Mann-Whitney U test (aka Wilcoxon Rank-Sum test). Which hypothesis tests's p value is used to make the statistical inference in each iteration should be determined by whether the assumption test detects a violation or not. We will discuss the logic and implementation of this together in class. Again, use the existing code later in the simulation to choose variable names.
+- The third simulation should do the same as the previous one, but it should test the assumptions of both homogeneity of variances and also normality of the data within each condition, as we did in the lesson. You can borrow code from the lesson to implement this assumption test. Which hypothesis test's p value is used to make the statistical inference in each iteration should depend on whether *either* assumption test detected a violation. Again, we will discuss the logic and implementation of this in class.
+
+Once you have written this code, try to interpret the results. We are told to test assumptions, presumably because it gives better results. Does it? Under what conditions? What do the results of these simulations suggest you should generally do in future?
+
+Lastly, please read the "Common statistical tests are linear models" which is linked in the further reading section below. This resource is extremely useful to understanding the relationship between parametric and non-parametric tests.
+
+# Assumption of homogeneity of variances
+
+## Illustrate different variances in normal data
+
+```{r}
+
+rsn(n = 100000, 
+    xi = 0, 
+    omega = 1, 
+    alpha = 0) |>
+  hist(main = "Skew-normal data when omega is 1.0", xlab = "Score", xlim = c(-6, 6))
+
+rsn(n = 100000, 
+    xi = 0, 
+    omega = 1.1, 
+    alpha = 0) |>
+  hist(main = "Skew-normal data when omega is 1.1", xlab = "Score", xlim = c(-6, 6))
+
+rsn(n = 100000, 
+    xi = 0, 
+    omega = 1.2, 
+    alpha = 0) |>
+  hist(main = "Skew-normal data when omega is 1.2", xlab = "Score", xlim = c(-6, 6))
+
+rsn(n = 100000, 
+    xi = 0, 
+    omega = 1.3, 
+    alpha = 0) |>
+  hist(main = "Skew-normal data when omega is 1.3", xlab = "Score", xlim = c(-6, 6))
+
+rsn(n = 100000, 
+    xi = 0, 
+    omega = 1.4, 
+    alpha = 0) |>
+  hist(main = "Skew-normal data when omega is 1.4", xlab = "Score", xlim = c(-6, 6))
+
+rsn(n = 100000, 
+    xi = 0, 
+    omega = 1.5, 
+    alpha = 0) |>
+  hist(main = "Skew-normal data when omega is 1.5", xlab = "Score", xlim = c(-6, 6))
+
+```
+
+## Power of Bartlett test with normal data
+
+Note that Levene's test uses the data's means, and therefore assumes normality. Bartlett's test uses the data's median, and does not assume normality. Let's employ Bartlett's test so that the test of homogeneity of variances does not itself rely on the assumption of normality. That is: I want to avoid having our assumptions tests having additional testable assumptions. 
+
+Note that the Barlett test can be implemented using `car::leveneTest(centre = "median")`.
+
+```{r}
+
+# remove all objects from environment ----
+rm(list = ls())
+
+
+# set the seed ----
+# for the pseudo random number generator to make results reproducible
+set.seed(42)
+
+
+# define data generating function ----
+generate_data <- function(n,
+                          location, # location, akin to mean
+                          scale_intervention, # scale, akin to SD
+                          scale_control,
+                          skew) { # slant/skew. When 0, produces normal/gaussian data
+  
+  data_intervention <- 
+    tibble(condition = "intervention",
+           score = rsn(n = n, 
+                       xi = location, # location, akin to mean
+                       omega = scale_intervention, # scale, akin to SD
+                       alpha = skew)) # slant/skew. When 0, produces normal/gaussian data
+  
+  data_control <- 
+    tibble(condition = "control",
+           score = rsn(n = n, 
+                       xi = location, # location, akin to mean
+                       omega = scale_control, # scale, akin to SD
+                       alpha = skew)) # slant/skew. When 0, produces normal/gaussian data
+  
+  data <- bind_rows(data_intervention,
+                    data_control) 
+  
+  return(data)
+}
+
+
+# define data analysis function ----
+analyse_data <- function(data) {
+  
+  require(car)
+  
+  assumption_test_homogeneity <- 
+    leveneTest(score ~ as.factor(condition), 
+               center = median,
+               data = data)
+  
+  results <- tibble(
+    assumption_test_homogeneity_p = assumption_test_homogeneity[1, "Pr(>F)"]
+  ) 
+  
+  return(results)
+}
+
+
+# define experiment parameters ----
+experiment_parameters_grid <- expand_grid(
+  n = 100, # n per condition, not total
+  location = 0, # location, akin to mean
+  scale_intervention = c(1.0, 1.1, 1.2, 1.3, 1.4, 1.5), # scale, akin to SD
+  scale_control = 1, # location, akin to mean
+  skew = 0, # slant/skew. When 0, produces normal/gaussian data
+  iteration = 1:1000
+)
+
+
+# run simulation ----
+simulation <- 
+  # using the experiment parameters
+  experiment_parameters_grid |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n,
+                                    location,
+                                    scale_intervention,
+                                    scale_control,
+                                    skew),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results = pmap(list(generated_data),
+                                 analyse_data))
+
+
+simulation_summary <- simulation |>
+  unnest(analysis_results) |>
+  group_by(n,
+           location,
+           scale_intervention,
+           scale_control) |>
+  summarize(proportion_of_significant_results = mean(assumption_test_homogeneity_p < .05),
+            .groups = "drop")
+
+simulation_summary |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+simulation_summary |>
+  filter(proportion_of_significant_results >= .95) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+# Conditional use of (non)parametric tests of central tendency based on tests of the assumptions of normality and homogeneity of variances
+
+This stimulation tests both normality within each condition and homogeneity of variances between the two conditions, as well as testing for differences in the central tendency using both parametric (Welches' t-test) and non-parametric tests (Wilcoxon Rank Sum test aka Mann-Whitney U-test). Which test of the differences in central tendency is used for each simulated data set is determined by whether any of the assumptions is detectably violated.
+
+This simulation therefore attempts to mimic the rules that many statistics textbooks instruct us to follow, and assesses the benefit of doing so on statistical power.
+
+```{r}
+
+# remove all objects from environment ----
+rm(list = ls())
+
+
+# set the seed ----
+# for the pseudo random number generator to make results reproducible
+set.seed(42)
+
+
+# define data generating function ----
+generate_data <- function(n,
+                          location_intervention, # location, akin to mean
+                          location_control,
+                          scale_intervention, # scale, akin to SD
+                          scale_control,
+                          skew) { # slant/skew. When 0, produces normal/gaussian data
+  
+  data_intervention <- 
+    tibble(condition = "intervention",
+           score = rsn(n = n, 
+                       xi = location_intervention, # location, akin to mean
+                       omega = scale_intervention, # scale, akin to SD
+                       alpha = skew)) # slant/skew. When 0, produces normal/gaussian data
+  
+  data_control <- 
+    tibble(condition = "control",
+           score = rsn(n = n, 
+                       xi = location_control, # location, akin to mean
+                       omega = scale_control, # scale, akin to SD
+                       alpha = skew)) # slant/skew. When 0, produces normal/gaussian data
+  
+  data <- bind_rows(data_intervention,
+                    data_control) 
+  
+  return(data)
+}
+
+
+# define data analysis function ----
+analyse_data <- function(data) {
+  
+  require(car)
+  
+  assumption_test_normality_intervention   <- shapiro.test(data$score[data$condition == "intervention"])
+  assumption_test_normality_control        <- shapiro.test(data$score[data$condition == "control"])
+  
+  assumption_test_homogeneity <- 
+    leveneTest(score ~ as.factor(condition), 
+               center = median,
+               data = data)
+  
+  hypothesis_test_students_t     <- t.test(formula = score ~ condition, 
+                                           data = data,
+                                           var.equal = TRUE,
+                                           alternative = "two.sided")
+  
+  hypothesis_test_mann_whitney_u <- wilcox.test(formula = score ~ condition, 
+                                                data = data,
+                                                alternative = "two.sided")
+  
+  results <- tibble(
+    assumption_test_normality_p_intervention = assumption_test_normality_intervention$p.value, 
+    assumption_test_normality_p_control = assumption_test_normality_control$p.value,
+    assumption_test_homogeneity_p = assumption_test_homogeneity[1, "Pr(>F)"],
+    hypothesis_test_p_students_t = hypothesis_test_students_t$p.value, 
+    hypothesis_test_p_mann_whitney_u = hypothesis_test_mann_whitney_u$p.value
+  ) |>
+    mutate(hypothesis_test_p_conditional = ifelse(assumption_test_normality_p_intervention < .05 |
+                                                    assumption_test_normality_p_control < .05 |
+                                                    assumption_test_homogeneity_p, 
+                                                  hypothesis_test_p_mann_whitney_u,
+                                                  hypothesis_test_p_students_t))
+  
+  return(results)
+}
+
+
+# define experiment parameters ----
+experiment_parameters_grid <- expand_grid(
+  n = 100, # n per condition, not total
+  location_intervention = 0.2,
+  location_control = 0.0,
+  scale_intervention = c(1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0), # scale, akin to SD
+  scale_control = 1, # location, akin to mean
+  skew = c(0, 1, 2, 3, 6, 9, 12), # slant/skew. When 0, produces normal/gaussian data
+  iteration = 1:1000
+)
+
+
+# run simulation ----
+simulation <- 
+  # using the experiment parameters
+  experiment_parameters_grid |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n,
+                                    location_intervention,
+                                    location_control,
+                                    scale_intervention,
+                                    scale_control,
+                                    skew),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results = pmap(list(generated_data),
+                                 analyse_data))
+
+
+# summarise simulation results over the iterations ----
+## ie what proportion of p values are significant (< .05)
+simulation_summary <- simulation |>
+  unnest(analysis_results) |>
+  mutate(n_per_group = as.factor(n)) |>
+  group_by(n,
+           location_intervention,
+           location_control,
+           scale_intervention,
+           scale_control,
+           skew) |>
+  summarize(power_assumption_test = mean(assumption_test_homogeneity_p < .05),
+            power_u = mean(hypothesis_test_p_mann_whitney_u < .05),
+            power_t = mean(hypothesis_test_p_students_t < .05),
+            power_u = mean(hypothesis_test_p_mann_whitney_u < .05),
+            power_conditional = mean(hypothesis_test_p_conditional < .05),
+            .groups = "drop") |>
+  mutate(conditional_better_than_t = power_conditional > power_t,
+         conditional_better_than_u = power_conditional > power_u,
+         u_better_than_t = power_u > power_t,
+         conditional_much_better_than_t = (power_conditional - power_t) >= .05,
+         conditional_much_better_than_u = (power_conditional - power_u) >= .05,
+         u_much_better_than_t = (power_u - power_t) >= .05)
+
+simulation_summary |>
+  select(n, location_intervention, location_control, scale_intervention, scale_control, skew,
+         power_assumption_test, power_u, power_t, power_conditional) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+simulation_summary |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+simulation_summary |>
+  summarize(percent_u_better_than_t = mean(u_better_than_t)*100,
+            percent_conditional_better_than_t = mean(conditional_better_than_t)*100,
+            percent_conditional_better_than_u = mean(conditional_better_than_u)*100) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 1) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+simulation_summary |>
+  summarize(percent_u_much_better_than_t = mean(u_much_better_than_t)*100,
+            percent_conditional_much_better_than_t = mean(conditional_much_better_than_t)*100,
+            percent_conditional_much_better_than_u = mean(conditional_much_better_than_u)*100) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 1) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+simulation_summary |>
+  filter(conditional_much_better_than_t) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 1) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+- Increases in statistical power for conditional use of tests is relatively small.
+- However, note that this doesn't consider distortions in effect size due to non-normality, or the conditional calculation or interpretation of non-parametric effect sizes (e.g., Ruscio's A, the rank-biserial correlation, etc). We don't assess these things in these simulations, but you should be aware of that these violations can have impacts on things other than false-positive rates and statistical power. 
+- We also don't assess the change in false-positive rates/statistical power across different sample sizes, only degrees of violations of assumptions. This would also be important to understand in a more complete simulation.
+
+# Further reading
+
+The above simulations still treat "t-test" and "Mann-Whitney U tests" as if they are totally different things, rather than both instances of linear models, one with a transformation applied to it. This is a general problem in the way psychologists get taught statistics: we learn about tests that have the names of their creators, rather than the underlying relationships between them. Jonas has an excellent website called [Common statistical tests are linear models](https://lindeloev.github.io/tests-as-linear/) that I strongly recommend you read and think about - it completely changed the way I understand parametric vs. non-parametric tests, the relationships between named tests, and the linear model. The cheat-sheet at the top of the website is also available as a pdf in this week's materials.
+
+For example, an independent t-test is implemented in R as `t.test(score ~ group`, but this is equivalent to running a linear model (linear regression) using `lm(score ~ 1 + group)`. Equally, the non-parametric version of a t-test, the Mann-Whitney U test (aka Wilcoxon Signed-Rank test), is implemented as `wilcox.test(score ~ group`. However, it is equivalent to running this a linear model on the sign-ranked outcome: `lm(signed_rank(score) ~ 1 + group)`. 
+
+Seeing (a) common statistical tests as linear models and (b) most common non-parametric versions of these tests as merely the same test run on the ranked data helps you see its all related.
+
+# Session info
+
+```{r}
+
+sessionInfo()
+
+```
+
+

@@ -11,9 +11,9 @@ output:
     toc_float: yes
 ---
 
-
 ```{r}
 
+# dependencies
 library(tidyr)
 library(dplyr)
 library(forcats)
@@ -111,19 +111,6 @@ This generates data from a single sample and the analysis only tests the assumpt
 rm(list = ls())
 
 
-# dependencies ----
-# repeated here for the sake of completeness 
-
-library(tidyr)
-library(dplyr)
-library(forcats)
-library(readr)
-library(purrr) 
-library(ggplot2)
-library(sn)
-library(knitr)
-library(kableExtra)
-
 # set the seed ----
 # for the pseudo random number generator to make results reproducible
 set.seed(42)
@@ -180,7 +167,7 @@ simulation <-
   # apply the analysis function to the generated data using the parameters relevant to analysis
   mutate(analysis_results = pmap(list(generated_data),
                                  analyse_data))
-  
+
 # summarise simulation results over the iterations ----
 ## ie what proportion of p values are significant (< .05)
 simulation_summary <- simulation |>
@@ -213,19 +200,6 @@ This generates data from a single sample and the analysis only tests the assumpt
 # remove all objects from environment ----
 rm(list = ls())
 
-
-# dependencies ----
-# repeated here for the sake of completeness 
-
-library(tidyr)
-library(dplyr)
-library(forcats)
-library(readr)
-library(purrr) 
-library(ggplot2)
-library(sn)
-library(knitr)
-library(kableExtra)
 
 # set the seed ----
 # for the pseudo random number generator to make results reproducible
@@ -283,7 +257,7 @@ simulation <-
   # apply the analysis function to the generated data using the parameters relevant to analysis
   mutate(analysis_results = pmap(list(generated_data),
                                  analyse_data))
-  
+
 # summarise simulation results over the iterations ----
 ## ie what proportion of p values are significant (< .05)
 simulation_summary <- simulation |>
@@ -313,19 +287,6 @@ To make the stimulation more realistic, we should test for normality in each of 
 rm(list = ls())
 
 
-# dependencies ----
-# repeated here for the sake of completeness 
-
-library(tidyr)
-library(dplyr)
-library(forcats)
-library(readr)
-library(purrr) 
-library(ggplot2)
-library(sn)
-library(knitr)
-library(kableExtra)
-
 # set the seed ----
 # for the pseudo random number generator to make results reproducible
 set.seed(42)
@@ -336,7 +297,7 @@ generate_data <- function(n,
                           location, # location, akin to mean
                           scale, # scale, akin to SD
                           skew) { # slant/skew. When 0, produces normal/gaussian data
-                          
+  
   
   data_control <- 
     tibble(condition = "control",
@@ -364,7 +325,7 @@ analyse_data <- function(data) {
   
   fit_intervention <- shapiro.test(data$score[data$condition == "intervention"])
   fit_control <- shapiro.test(data$score[data$condition == "control"])
-
+  
   results <- tibble(p_intervention = fit_intervention$p.value, 
                     p_control = fit_control$p.value) 
   
@@ -397,7 +358,7 @@ simulation <-
   # apply the analysis function to the generated data using the parameters relevant to analysis
   mutate(analysis_results = pmap(list(generated_data),
                                  analyse_data))
-  
+
 # summarise simulation results over the iterations ----
 ## ie what proportion of p values are significant (< .05)
 simulation_summary <- simulation |>
@@ -428,19 +389,6 @@ This stimulation tests normality in both conditions' data, as well as testing fo
 rm(list = ls())
 
 
-# dependencies ----
-# repeated here for the sake of completeness 
-
-library(tidyr)
-library(dplyr)
-library(forcats)
-library(readr)
-library(purrr) 
-library(ggplot2)
-library(sn)
-library(knitr)
-library(kableExtra)
-
 # set the seed ----
 # for the pseudo random number generator to make results reproducible
 set.seed(42)
@@ -452,7 +400,7 @@ generate_data <- function(n,
                           location_intervention,
                           scale, # scale, akin to SD
                           skew) { # slant/skew. When 0, produces normal/gaussian data
-                          
+  
   
   data_control <- 
     tibble(condition = "control",
@@ -480,16 +428,16 @@ analyse_data <- function(data) {
   
   assumption_test_intervention   <- shapiro.test(data$score[data$condition == "intervention"])
   assumption_test_control        <- shapiro.test(data$score[data$condition == "control"])
-
+  
   hypothesis_test_students_t      <- t.test(formula = score ~ condition, 
-                                      data = data,
-                                      var.equal = TRUE,
-                                      alternative = "two.sided")
+                                            data = data,
+                                            var.equal = TRUE,
+                                            alternative = "two.sided")
   
   hypothesis_test_mann_whitney_u <- wilcox.test(formula = score ~ condition, 
                                                 data = data,
                                                 alternative = "two.sided")
-
+  
   results <- tibble(
     assumption_test_p_intervention = assumption_test_intervention$p.value, 
     assumption_test_p_control = assumption_test_control$p.value,
@@ -531,7 +479,7 @@ simulation <-
   # apply the analysis function to the generated data using the parameters relevant to analysis
   mutate(analysis_results = pmap(list(generated_data),
                                  analyse_data))
-  
+
 # summarise simulation results over the iterations ----
 ## ie what proportion of p values are significant (< .05)
 simulation_summary <- simulation |>
