@@ -8,6 +8,7 @@ library(tidyr)
 library(dplyr)
 library(purrr) 
 library(ggplot2)
+library(ggtext)
 library(sn)
 library(knitr)
 library(kableExtra)
@@ -70,7 +71,7 @@ experiment_parameters_grid <- expand_grid(
   scale_intervention = c(1, 1.5),
   skew_control = 0,
   skew_intervention = 0, 
-  iteration = 1:10000
+  iteration = 1:1000
 ) |>
   mutate(n_intervention = n_control)
 
@@ -151,6 +152,12 @@ data_summary_ordered <- simulation_summary |>
 
 
 multiverse_plot <- function(data, outcome_name = "Outcome", relative_height_of_upper_plot = 0.70, outcome_cutoff = NULL){
+  
+  # dependencies
+  require(dplyr)
+  require(tidyr)
+  require(ggplot2)
+  require(ggtext)
   
   # check if the input contains the columns `interval_lower` and `interval_upper` and if not set them to the same value as outcome (so they are invisible)
   if(!"interval_lower" %in% names(data)){
