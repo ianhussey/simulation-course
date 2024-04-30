@@ -1,6 +1,6 @@
 ---
 title: "Not so standardized effect-sizes"
-subtitle: "Using the example of Welch's independent *t*-test"
+subtitle: "Why use standardized effect sizes?"
 author: "Ian Hussey"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
@@ -11,18 +11,6 @@ output:
     toc: yes
     toc_float: yes
 ---
-
-# Overview of tutorial
-
-This lesson focuses on the distributions of *p* values "under the null hypothesis" (i.e., when the null hypothesis is true, aka when the data generating process is a population model where the effect is zero) and "under the alternative hypothesis" (i.e., when the alternative hypothesis is true, aka when the data generating process is a population model where the effect is non-zero).
-
-Without looking into the math, let's use simulations to visualise these distributions, in order to understand *p* values better.
-
-# Plotting distributions
-
-In the first lesson, we refreshed our knowledge of distributions and used ggplot to visualise them.
-
-We covered the uniform distribution, where all values between a given range are equally probable, and the normal distribution, which follows a normal (gaussian) bell-shaped distribution. 
 
 # Distribution of SDs in a given study
 

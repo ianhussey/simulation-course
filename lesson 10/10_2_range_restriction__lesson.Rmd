@@ -21,7 +21,7 @@ knitr::opts_chunk$set(message = FALSE,
 
 # Dependencies & data
 
-BDI-II data taken from Cataldo et al. (2022) "Abnormal Evidence Accumulation Underlies the Positive Memory Deficit in Depression" doi https://doi.org/10.1037/xge0001268
+Real BDI-II data is taken from Cataldo et al. (2022) Abnormal Evidence Accumulation Underlies the Positive Memory Deficit in Depression, doi: [10.1037/xge0001268](https://doi.org/10.1037/xge0001268).
 
 ```{r}
 
@@ -29,12 +29,9 @@ library(tidyverse)
 library(janitor)
 library(knitr)
 library(kableExtra)
+library(faux)
 
-data_bdi <- 
-  read_csv("../../data/raw/cataldo 2022/recall_intrusions.csv") |>
-  select(id, age, gender, bdi_score) |>
-  distinct(id, .keep_all = TRUE) |>
-  drop_na(bdi_score)
+data_bdi <- read_csv("data/bdi_data.csv")
 
 ```
 
@@ -245,8 +242,6 @@ It is therefore possible - indeed, likely - that SAT scores are usefully predict
 
 ```{r fig.height=5, fig.width=5}
 
-library(faux)
-
 # Set seed for reproducibility
 set.seed(42)
 
@@ -277,21 +272,21 @@ cat("Correlation in restricted data:", janitor::round_half_up(restricted_correla
 # Plot full data with correlation annotation
 ggplot(simulated_data, aes(x = x, y = y)) +
   geom_point(alpha = 0.4) +
-  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  #geom_smooth(method = "lm", se = FALSE, color = "blue") +
   ggtitle("Correlation in Full Data") +
   theme_linedraw() +
-  annotate("text", x = Inf, y = Inf, label = paste("r =", round(full_correlation, 2)), 
-           hjust = 1.1, vjust = 2, size = 5, color = "blue") +
+  annotate("text", x = -2, y = 2, label = paste("r =", round(full_correlation, 2)), 
+           hjust = 0.5, vjust = 0.5, size = 6, color = "blue") +
   coord_cartesian(xlim = c(-3, 3), ylim = c(-3, 3))
 
 # Plot restricted data with correlation annotation
 ggplot(simulated_data_range_restricted, aes(x = x, y = y)) +
   geom_point(alpha = 0.4) +
-  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  #geom_smooth(method = "lm", se = FALSE, color = "red") +
   ggtitle("Correlation in Range Restricted Data") +
   theme_linedraw() +
-  annotate("text", x = Inf, y = Inf, label = paste("r =", round(restricted_correlation, 2)), 
-           hjust = 1.1, vjust = 2, size = 5, color = "red") +
+  annotate("text", x = -2, y = 2, label = paste("r =", round(restricted_correlation, 2)), 
+           hjust = 0.5, vjust = 0.5, size = 6, color = "red") +
   coord_cartesian(xlim = c(-3, 3), ylim = c(-3, 3))
 
 ```
