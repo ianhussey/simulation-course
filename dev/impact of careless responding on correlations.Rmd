@@ -1,0 +1,560 @@
+---
+title: "The impact of careless responding on correlations"
+author: "Ian Hussey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+```
+
+# Overview
+
+Simulations to try to conceptually reproduce the effects described by [Stosic et al. 2024](https://journals.sagepub.com/doi/epub/10.1177/25152459241231581) and their [shiny app](https://fuhred.shinyapps.io/CarelessRespondingSimulator/).
+
+\TODO outline assumptions here, ie careless responding = uniform distribution; bounded response options + censoring.
+
+```{r fig.height=5, fig.width=10}
+
+# remove all objects from environment ----
+#rm(list = ls())
+
+
+# dependencies ----
+# repeated here for the sake of completeness 
+
+library(tidyr)
+library(dplyr)
+library(tibble)
+library(forcats)
+library(readr)
+library(purrr) 
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(faux)
+
+# set the seed ----
+# for the pseudo random number generator to make results reproducible
+set.seed(42)
+
+# define data generating function ----
+generate_data <- function(n,
+                          prob_careless,
+                          rho_careful,
+                          mu_x_careful,
+                          mu_y_careful) { 
+
+  n_careless <- floor(n * prob_careless)
+  n_careful <- n - n_careless
+  
+  data_careful <- 
+    faux::rnorm_multi(n = n_careful, 
+                      mu = c(y = mu_y_careful, x = mu_x_careful), 
+                      sd = c(1, 1), 
+                      r = matrix(c(1, rho_careful, 
+                                   rho_careful, 1), 
+                                 ncol = 2)) |>
+    mutate(type = "careful") |>
+    # convert to likert
+    # mutate(y = as.numeric(as.character(cut(y, breaks = 7, labels = 1:7))),
+    #        x = as.numeric(as.character(cut(x, breaks = 7, labels = 1:7))))
+    mutate(y = janitor::round_half_up(y, 2),
+           x = janitor::round_half_up(x, 2)) |>
+    mutate(y = case_when(y < -3 ~ -3, 
+                         y > +3 ~ +3,
+                         TRUE ~ y),
+           x = case_when(x < -3 ~ -3, 
+                         x > +3 ~ +3,
+                         TRUE ~ x))
+    # mutate(y = as.integer(y + 4),
+    #        x = as.integer(x + 4))
+
+  data_careless <-
+    # data.frame(y = sample(-3:+3, size = n_careless, replace = TRUE),
+    #            x = sample(-3:+3, size = n_careless, replace = TRUE)) |>
+    data.frame(y = janitor::round_half_up(runif(n = n_careless, min = -3, max = +3), digits = 2),
+               x = janitor::round_half_up(runif(n = n_careless, min = -3, max = +3), digits = 2)) |>
+    mutate(type = "careless") 
+  
+  data <- bind_rows(data_careful,
+                    data_careless) |>
+    rownames_to_column(var = "id")
+  
+  return(data)
+}
+
+
+# define data analysis function ----
+analyse_data <- function(data) {
+  
+  fit_all <- cor.test(data$y,
+                      data$x, 
+                      method = "pearson")
+  
+  dat_careful <- data |>
+    filter(type == "careful")
+  
+  fit_careful <- cor.test(dat_careful$y,
+                          dat_careful$x, 
+                          method = "pearson")
+  
+  dat_careless <- data |>
+    filter(type == "careless")
+  
+  fit_careless <- cor.test(dat_careless$y,
+                           dat_careless$x, 
+                           method = "pearson")
+  
+  results <- tibble(r_all = fit_all$estimate,
+                    p_all = fit_all$p.value,
+                    r_careful = fit_careful$estimate,
+                    p_careful = fit_careful$p.value,
+                    r_careless = fit_careless$estimate,
+                    p_careless = fit_careless$p.value,)
+  
+  return(results)
+}
+
+```
+
+# Just noise (negative control, tracks intuition)
+
+Both careful and careless responding have means at midpoint of scale, population correlation is non-zero. 
+
+\TODO **Results shouldn't be biased from the population value, but seem to be? Recheck the paper to see if I understand what should happen when its just noise and no difference in means.**
+
+```{r fig.height=6, fig.width=6}
+
+# define experiment parameters ----
+experiment_parameters_grid <- expand_grid(
+  n = 800, #c(100, 200, 300),
+  prob_careless = 0.15,
+  rho_careful = 0.5, 
+  mu_x_careful = 0,
+  mu_y_careful = 0,
+  iteration = 1:1000
+)
+
+# run simulation ----
+simulation <- 
+  # using the experiment parameters
+  experiment_parameters_grid |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n,
+                                    prob_careless,
+                                    rho_careful,
+                                    mu_x_careful,
+                                    mu_y_careful),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results = pmap(list(generated_data),
+                                 analyse_data))
+  
+# check data using iteration 400 (randomly chosen)
+dat <- simulation$generated_data[[400]] |>
+  pivot_longer(cols = c(x, y))
+
+ggplot(dat, aes(value)) +
+  geom_histogram(binwidth = 0.5) +
+  facet_wrap(name ~ type, scales = "free") +
+  theme_linedraw() +
+  coord_cartesian(xlim = c(-3.5, +3.5))
+
+ggplot(simulation$generated_data[[400]], aes(x, y)) +
+  geom_point(aes(color = type, shape = type)) +
+  geom_smooth(aes(color = type), method = "lm", alpha = 0) +
+  #geom_smooth(method = "lm", alpha = 0, color = "black") +
+  coord_cartesian(xlim = c(-3.5, +3.5)) +
+  scale_color_viridis_d(begin = 0.4, end = 0.6) +
+  theme_linedraw() +
+  theme(legend.position = c(.9,.15)) +
+  ggtitle("By responding type")
+
+ggplot(simulation$generated_data[[400]], aes(x, y)) +
+  geom_point() +
+  geom_smooth(method = "lm", alpha = 0, color = "black") +
+  coord_cartesian(xlim = c(-3.5, +3.5)) +
+  theme_linedraw() +
+  ggtitle("Effect without excluding careless responders")
+
+# summarise simulation results over the iterations ----
+simulation_summary <- simulation |>
+  unnest(analysis_results) |>
+  group_by(n,
+           prob_careless,
+           rho_careful,
+           mu_x_careful,
+           mu_y_careful) |>
+  summarize(mean_r = mean(r_all),
+            mean_r_careful = mean(r_careful),
+            mean_r_careless = mean(r_careless),
+            bias_mean_diff = mean(r_all - rho_careful),
+            #bias_mean_proportion = mean(bias_mean_diff/r),
+            .groups = "drop")
+
+# print table
+simulation_summary |>
+  #arrange(bias_mean_proportion) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 2) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+# Create effect
+
+Mean in the careful responding diverges from the midpoint of the scale (in same direction on X and Y variables), population correlation is 0.
+
+## Mean below the middle point
+
+```{r fig.height=6, fig.width=6}
+
+# define experiment parameters ----
+experiment_parameters_grid <- expand_grid(
+  n = 800, #c(100, 200, 300),
+  prob_careless = 0.15,
+  rho_careful = 0, 
+  mu_x_careful = -2,
+  mu_y_careful = -2,
+  iteration = 1:1000
+)
+
+# run simulation ----
+simulation <- 
+  # using the experiment parameters
+  experiment_parameters_grid |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n,
+                                    prob_careless,
+                                    rho_careful,
+                                    mu_x_careful,
+                                    mu_y_careful),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results = pmap(list(generated_data),
+                                 analyse_data))
+  
+# check data using iteration 400 (randomly chosen)
+dat <- simulation$generated_data[[400]] |>
+  pivot_longer(cols = c(x, y))
+
+ggplot(dat, aes(value)) +
+  geom_histogram(binwidth = 0.5) +
+  facet_wrap(name ~ type, scales = "free") +
+  theme_linedraw() +
+  coord_cartesian(xlim = c(-3.5, +3.5))
+
+ggplot(simulation$generated_data[[400]], aes(x, y)) +
+  geom_point(aes(color = type, shape = type)) +
+  geom_smooth(aes(color = type), method = "lm", alpha = 0) +
+  #geom_smooth(method = "lm", alpha = 0, color = "black") +
+  coord_cartesian(xlim = c(-3.5, +3.5)) +
+  scale_color_viridis_d(begin = 0.4, end = 0.6) +
+  theme_linedraw() +
+  theme(legend.position = c(.9,.15)) +
+  ggtitle("By responding type")
+
+ggplot(simulation$generated_data[[400]], aes(x, y)) +
+  geom_point() +
+  geom_smooth(method = "lm", alpha = 0, color = "black") +
+  coord_cartesian(xlim = c(-3.5, +3.5)) +
+  theme_linedraw() +
+  ggtitle("Effect without excluding careless responders")
+
+# summarise simulation results over the iterations ----
+simulation_summary <- simulation |>
+  unnest(analysis_results) |>
+  group_by(n,
+           prob_careless,
+           rho_careful,
+           mu_x_careful,
+           mu_y_careful) |>
+  summarize(mean_r = mean(r_all),
+            mean_r_careful = mean(r_careful),
+            mean_r_careless = mean(r_careless),
+            bias_mean_diff = mean(r_all - rho_careful),
+            #bias_mean_proportion = mean(bias_mean_diff/r),
+            .groups = "drop")
+
+# print table
+simulation_summary |>
+  #arrange(bias_mean_proportion) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 2) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+## Mean above the middle point
+
+```{r fig.height=6, fig.width=6}
+
+# define experiment parameters ----
+experiment_parameters_grid <- expand_grid(
+  n = 800, #c(100, 200, 300),
+  prob_careless = 0.15,
+  rho_careful = 0, 
+  mu_x_careful = +2,
+  mu_y_careful = +2,
+  iteration = 1:1000
+)
+
+# run simulation ----
+simulation <- 
+  # using the experiment parameters
+  experiment_parameters_grid |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n,
+                                    prob_careless,
+                                    rho_careful,
+                                    mu_x_careful,
+                                    mu_y_careful),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results = pmap(list(generated_data),
+                                 analyse_data))
+  
+# check data using iteration 400 (randomly chosen)
+dat <- simulation$generated_data[[400]] |>
+  pivot_longer(cols = c(x, y))
+
+ggplot(dat, aes(value)) +
+  geom_histogram(binwidth = 0.5) +
+  facet_wrap(name ~ type, scales = "free") +
+  theme_linedraw() +
+  coord_cartesian(xlim = c(-3.5, +3.5))
+
+ggplot(simulation$generated_data[[400]], aes(x, y)) +
+  geom_point(aes(color = type, shape = type)) +
+  geom_smooth(aes(color = type), method = "lm", alpha = 0) +
+  #geom_smooth(method = "lm", alpha = 0, color = "black") +
+  coord_cartesian(xlim = c(-3.5, +3.5)) +
+  scale_color_viridis_d(begin = 0.4, end = 0.6) +
+  theme_linedraw() +
+  theme(legend.position = c(.9,.15)) +
+  ggtitle("By responding type")
+
+ggplot(simulation$generated_data[[400]], aes(x, y)) +
+  geom_point() +
+  geom_smooth(method = "lm", alpha = 0, color = "black") +
+  coord_cartesian(xlim = c(-3.5, +3.5)) +
+  theme_linedraw() +
+  ggtitle("Effect without excluding careless responders")
+
+# summarise simulation results over the iterations ----
+simulation_summary <- simulation |>
+  unnest(analysis_results) |>
+  group_by(n,
+           prob_careless,
+           rho_careful,
+           mu_x_careful,
+           mu_y_careful) |>
+  summarize(mean_r = mean(r_all),
+            mean_r_careful = mean(r_careful),
+            mean_r_careless = mean(r_careless),
+            bias_mean_diff = mean(r_all - rho_careful),
+            #bias_mean_proportion = mean(bias_mean_diff/r),
+            .groups = "drop")
+
+# print table
+simulation_summary |>
+  #arrange(bias_mean_proportion) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 2) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+# Inflate effect
+
+Mean in the careful responding diverges from the midpoint of the scale (in same direction on X and Y variables), population correlation is non-zero.
+
+```{r fig.height=6, fig.width=6}
+
+# define experiment parameters ----
+experiment_parameters_grid <- expand_grid(
+  n = 800, #c(100, 200, 300),
+  prob_careless = 0.15,
+  rho_careful = 0.5, 
+  mu_x_careful = 2,
+  mu_y_careful = 2,
+  iteration = 1:1000
+)
+
+# run simulation ----
+simulation <- 
+  # using the experiment parameters
+  experiment_parameters_grid |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n,
+                                    prob_careless,
+                                    rho_careful,
+                                    mu_x_careful,
+                                    mu_y_careful),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results = pmap(list(generated_data),
+                                 analyse_data))
+  
+# check data using iteration 400 (randomly chosen)
+dat <- simulation$generated_data[[400]] |>
+  pivot_longer(cols = c(x, y))
+
+ggplot(dat, aes(value)) +
+  geom_histogram(binwidth = 0.5) +
+  facet_wrap(name ~ type, scales = "free") +
+  theme_linedraw() +
+  coord_cartesian(xlim = c(-3.5, +3.5))
+
+ggplot(simulation$generated_data[[400]], aes(x, y)) +
+  geom_point(aes(color = type, shape = type)) +
+  geom_smooth(aes(color = type), method = "lm", alpha = 0) +
+  #geom_smooth(method = "lm", alpha = 0, color = "black") +
+  coord_cartesian(xlim = c(-3.5, +3.5)) +
+  scale_color_viridis_d(begin = 0.4, end = 0.6) +
+  theme_linedraw() +
+  theme(legend.position = c(.9,.15)) +
+  ggtitle("By responding type")
+
+ggplot(simulation$generated_data[[400]], aes(x, y)) +
+  geom_point() +
+  geom_smooth(method = "lm", alpha = 0, color = "black") +
+  coord_cartesian(xlim = c(-3.5, +3.5)) +
+  theme_linedraw() +
+  ggtitle("Effect without excluding careless responders")
+
+# summarise simulation results over the iterations ----
+simulation_summary <- simulation |>
+  unnest(analysis_results) |>
+  group_by(n,
+           prob_careless,
+           rho_careful,
+           mu_x_careful,
+           mu_y_careful) |>
+  summarize(mean_r = mean(r_all),
+            mean_r_careful = mean(r_careful),
+            mean_r_careless = mean(r_careless),
+            bias_mean_diff = mean(r_all - rho_careful),
+            #bias_mean_proportion = mean(bias_mean_diff/r),
+            .groups = "drop")
+
+# print table
+simulation_summary |>
+  #arrange(bias_mean_proportion) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 2) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+# Dilute effect
+
+Mean in the careful responding diverges from the midpoint of the scale (in opposite directions on X and Y variables), population correlation is non-zero.
+
+```{r fig.height=6, fig.width=6}
+
+# define experiment parameters ----
+experiment_parameters_grid <- expand_grid(
+  n = 800, #c(100, 200, 300),
+  prob_careless = 0.15,
+  rho_careful = 0.5, 
+  mu_x_careful = +2,
+  mu_y_careful = -2,
+  iteration = 1:1000
+)
+
+# run simulation ----
+simulation <- 
+  # using the experiment parameters
+  experiment_parameters_grid |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n,
+                                    prob_careless,
+                                    rho_careful,
+                                    mu_x_careful,
+                                    mu_y_careful),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results = pmap(list(generated_data),
+                                 analyse_data))
+  
+# check data using iteration 400 (randomly chosen)
+dat <- simulation$generated_data[[400]] |>
+  pivot_longer(cols = c(x, y))
+
+ggplot(dat, aes(value)) +
+  geom_histogram(binwidth = 0.5) +
+  facet_wrap(name ~ type, scales = "free") +
+  theme_linedraw() +
+  coord_cartesian(xlim = c(-3.5, +3.5))
+
+ggplot(simulation$generated_data[[400]], aes(x, y)) +
+  geom_point(aes(color = type, shape = type)) +
+  geom_smooth(aes(color = type), method = "lm", alpha = 0) +
+  #geom_smooth(method = "lm", alpha = 0, color = "black") +
+  coord_cartesian(xlim = c(-3.5, +3.5)) +
+  scale_color_viridis_d(begin = 0.4, end = 0.6) +
+  theme_linedraw() +
+  theme(legend.position = c(.9,.15)) +
+  ggtitle("By responding type")
+
+ggplot(simulation$generated_data[[400]], aes(x, y)) +
+  geom_point() +
+  geom_smooth(method = "lm", alpha = 0, color = "black") +
+  coord_cartesian(xlim = c(-3.5, +3.5)) +
+  theme_linedraw() +
+  ggtitle("Effect without excluding careless responders")
+
+# summarise simulation results over the iterations ----
+simulation_summary <- simulation |>
+  unnest(analysis_results) |>
+  group_by(n,
+           prob_careless,
+           rho_careful,
+           mu_x_careful,
+           mu_y_careful) |>
+  summarize(mean_r = mean(r_all),
+            mean_r_careful = mean(r_careful),
+            mean_r_careless = mean(r_careless),
+            bias_mean_diff = mean(r_all - rho_careful),
+            #bias_mean_proportion = mean(bias_mean_diff/r),
+            .groups = "drop")
+
+# print table
+simulation_summary |>
+  #arrange(bias_mean_proportion) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 2) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+# Session info
+
+```{r}
+
+sessionInfo()
+
+```
+
+
