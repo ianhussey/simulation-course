@@ -1,0 +1,39 @@
+---
+title: "quarto and shiny"
+format: 
+  html:
+    page-layout: custom
+server: shiny
+---
+
+```{r}
+library(tidyverse)
+library(shiny)
+```
+
+```{r}
+#| panel: sidebar
+vars <- setdiff(names(iris), "Species")
+selectInput('xcol', 'X Variable', vars)
+selectInput('ycol', 'Y Variable', vars, selected = vars[[2]])
+numericInput('clusters', 'Cluster count', 3, min = 1, max = 9)
+```
+
+```{r}
+#| panel: fill
+plotOutput('plot1')
+```
+
+```{r}
+#| context: server
+selectedData <- reactive({
+    iris[, c(input$xcol, input$ycol)]
+  })
+
+output$plot1 <- renderPlot({
+  par(mar = c(5.1, 4.1, 0, 1))
+  plot(selectedData(),
+       col = clusters()$cluster,
+       pch = 20, cex = 3)
+})
+```
