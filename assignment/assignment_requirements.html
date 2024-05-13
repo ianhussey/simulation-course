@@ -1618,13 +1618,22 @@ conditions</li>
 the simulation conditions onto the data generation/analysis
 functions</li>
 <li>A large number of iterations (e.g., &gt;=1000). Much larger numbers
-might be needed for some times of questions in order to get more stable
+might be needed for some types of questions in order to get more stable
 estimates, but smaller numbers are rarely appropriate. See Siepe et
 al. (2024) for a good discussion about how to choose the number of
 iterations if you are interested, but you are not required to calculate
 or report Monte Carlo standard errors.</li>
-<li>A summarization of the results over the iterations. The conditions
-simulated must align with the summary.</li>
+<li>A summary of the results over the iterations using a suitable
+metric, as we’ve done in other simulations. For example, the mean of a
+given estimate per condition (e.g., mean effect size), or the proportion
+of iterations that meet a relevant criterion (e.g., proportion of
+iterations that find p &lt; .05), or metrics of bias (e.g., between the
+population value and the sample estimate; using metrics like “Mean
+Absolute Error” or “Root Mean Squared Error”). Always remember that the
+conditions simulated must align with the summary. Specifically, if a
+given parameter had multiple values in your <code>expand_grid()</code>
+call, ensure your later <code>group_by()</code> call when summarizing
+also includes this parameter.</li>
 </ul>
 <p>Your report must contain (1) a written description of the research
 question, (2) a written description of the conditions that you simulate
@@ -1650,7 +1659,7 @@ for your assignment.</p>
 <p>There is no trick question here. If completing the assignment feels
 impossibly difficult, come and talk to me and we’ll find a way to make
 it more manageable. Equally, I am looking for meaningful engagement from
-you here. To satisfy the ECTs requirements of this course, this
+you here. To satisfy the ECTS requirements of this course, this
 assignment should take you 10s of hours even if you’re a good coder. If
 you’re unsure, just ask me - ideally in the class’s Slack channel so
 others can benefit from the discussion, but private DMs are ok too.</p>
