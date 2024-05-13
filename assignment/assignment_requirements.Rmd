@@ -1,0 +1,67 @@
+---
+title: "Assignment requirements"
+author: "Ian Hussey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+### Overview
+
+This course is evaluated via an at-home assignment. For the assignment, you will write and report your own simulation to answer a research question of your choice. 
+
+Please read Siepe et al. (2024) "Simulation Studies for Methodological Research in Psychology: A Standardized Template for Planning, Preregistration, and Reporting" for a very useful conceptual understanding of what makes for a well run and reported simulation study, and discussion of different kinds of simulation studies, their goals and purposes, designs, metrics, and estimates of error. I do not expect you to report all the details they suggest in their preregistration template (e.g., Monte Carlo standard errors). 
+
+### Assignment submission format
+
+You must submit your assignment as a *single RMarkdown* (.Rmd - not the .html) file via Ilias by **{{Agree on a submission date in class.}}**. 
+
+In future, I will probably require students to use GitHub for weekly and end of seminar assignments, but I want to keep it simple here as we had problems with GitHub last semester.
+
+### Your code should be *reproducible*
+
+We are doing reproducible science here. The first thing I will do is open your file and click Knit, and it should produce a .html file for me to view your report. If it throws an error for me, its not reproducible, and you'll lose marks. Submitting non-reproducible results is the easiest way to lose marks. Test your .Rmd file on a friend's computer to avoid this. 
+
+### Your code should be *cleanly written and intelligible to others*
+
+The easier it is for me to read and understand your code - including your comments - the better a grade you will receive. 
+- I recommend you follow the [tidyverse Style Guide](https://style.tidyverse.org/index.html), but the main thing is to be consistent. 
+- Think about how you use white-space and indenting in particular. Remember that you can auto-indent your code by selecting all the code in a given file (ctrl-A / cmd-A) and the auto indenting it with ctrl-I / cmd-I.
+
+### Assignment components
+
+The workflow of your simulation code should match that employed in class:
+
+- A function for data generation
+- A function for analysis
+- An expand_grid (or comparable) call specifying the simulation conditions
+- `pmap()` calls inside `mutate()` calls to map the simulation conditions onto the data generation/analysis functions 
+- A large number of iterations (e.g., >=1000). Much larger numbers might be needed for some times of questions in order to get more stable estimates, but smaller numbers are rarely appropriate. See Siepe et al. (2024) for a good discussion about how to choose the number of iterations if you are interested, but you are not required to calculate or report Monte Carlo standard errors.
+- A summarization of the results over the iterations. The conditions simulated must align with the summary.
+
+Your report must contain (1) a written description of the research question, (2) a written description of the conditions that you simulate in order to answer this, (3) the simulation code itself, (4) the results of the simulation in table and/or plot format, and (5) a written summary of the results and implications. The written descriptions should be consistent with the code implementation: your words must match your code, or it looks like you didn't understand what you were doing.
+
+### Choice of research question and scope of assignment
+
+The research question you answer in your simulation must substantively go beyond the ones we constructed in class. To get a good grade, your simulation does not have to be publication worthy, but it should choose a meaningful question and answer it. You can and should ask for feedback from me and others regarding the choice of research question. As with all forms of simulations, you should start smaller and less ambitious and build it up. Suggestions for topics were provided in previous weeks (see "ideas for assignments.docx" and "synthesising_and_planning.Rmd"), and I've prompted you in previous weeks to start thinking about and discussing possible research questions for your assignment.
+
+There is no trick question here. If completing the assignment feels impossibly difficult, come and talk to me and we'll find a way to make it more manageable. Equally, I am looking for meaningful engagement from you here. To satisfy the ECTs requirements of this course, this assignment should take you 10s of hours even if you're a good coder. If you're unsure, just ask me - ideally in the class's Slack channel so others can benefit from the discussion, but private DMs are ok too.
+
+### Use of AI tools
+
+You may use AI tools for this assignment, e.g., ChatGPT or Microsoft CodePilot or others. You may use this for both drafting code or bug fixing code, and for drafting and editing your written descriptions. You may also reuse or remix any code provided to you in this seminar's lessons and assignments without attribution. However, you are ultimately responsible for your final assignment, whether it runs, contains errors, omissions, or inaccuracies, and whether the written sections and the code are aligned. 
+
+### Use of human assistance
+
+Science is highly collaborative. You may also use humans for input and feedback on your report: you can solicit feedback from classmates, friends, and me (e.g., in class or on Slack to a more limited extent). Your are ultimately responsible for your report, and your final assignment, and your assignment must be your work. But part of learning to code and to do scientific collaboration is to learn how to pool resources and expertise. 
+
+### Expectation of meaningful engagement
+
+This also has an important implication: because you have lots of opportunity for input from both AI and other humans, I expect that if you are stuck you will make use of these plentiful resources. Part of the assignment here is to engage in problem solving in order to produce the required result. Incomplete assignments or ones containing incomplete or severely broken code may lose substantial marks.
+
+
