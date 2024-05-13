@@ -1,0 +1,405 @@
+---
+title: "Multiverse plots for simulation studies"
+author: "Ian Hussey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+```
+
+# Simulation
+
+Proportion of significant results from students t test under various conditions.
+
+```{r}
+
+# dependencies
+library(tidyr)
+library(dplyr)
+library(purrr) 
+library(ggplot2)
+library(ggtext)
+library(sn)
+library(knitr)
+library(kableExtra)
+library(janitor)
+
+# set the seed ----
+# for the pseudo random number generator to make results reproducible
+set.seed(42)
+
+# define data generating function ----
+generate_data <- function(n_control,
+                          n_intervention,
+                          location_control, # location, akin to mean
+                          location_intervention,
+                          scale_control, # scale, akin to SD
+                          scale_intervention,
+                          skew_control, # slant/skew. When 0, produces normal/gaussian data
+                          skew_intervention) {
+  
+  data_control <- 
+    tibble(condition = "control",
+           score = rsn(n = n_control, 
+                       xi = location_control, # location, akin to mean
+                       omega = scale_control, # scale, akin to SD
+                       alpha = skew_control)) # slant/skew. When 0, produces normal/gaussian data
+  
+  data_intervention <- 
+    tibble(condition = "intervention",
+           score = rsn(n = n_intervention, 
+                       xi = location_intervention, # location, akin to mean
+                       omega = scale_intervention, # scale, akin to SD
+                       alpha = skew_intervention)) # slant/skew. When 0, produces normal/gaussian data
+  
+  data <- bind_rows(data_control,
+                    data_intervention) 
+  
+  return(data)
+}
+
+
+# define data analysis function ----
+analyse_data <- function(data) {
+  res_t_test <- t.test(formula = score ~ condition, 
+                       data = data,
+                       var.equal = FALSE,
+                       alternative = "two.sided")
+  
+  res <- tibble(p = res_t_test$p.value)
+  
+  return(res)
+}
+
+# define experiment parameters ----
+experiment_parameters_grid <- expand_grid(
+  n_control = c(50, 100, 150),
+  #n_intervention = 100,
+  location_control = 0,
+  location_intervention = c(0.0, 0.2, 0.5, 0.8), 
+  scale_control = 1,
+  scale_intervention = c(1, 1.5),
+  skew_control = 0,
+  skew_intervention = 0, 
+  iteration = 1:1000
+) |>
+  mutate(n_intervention = n_control)
+
+# run simulation ----
+simulation <- 
+  # using the experiment parameters
+  experiment_parameters_grid |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n_control,
+                                    n_intervention,
+                                    location_control,
+                                    location_intervention,
+                                    scale_control,
+                                    scale_intervention,
+                                    skew_control,
+                                    skew_intervention),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results = pmap(list(generated_data),
+                                 analyse_data))
+
+```
+
+# Summarize over iterations
+
+## Table of results
+
+The typical way of illustrating simulation results.
+
+```{r}
+
+simulation_summary <- simulation |>
+  unnest(analysis_results) |>
+  group_by(n_control,
+           n_intervention,
+           location_control,
+           location_intervention,
+           scale_control,
+           scale_intervention,
+           skew_control,
+           skew_intervention) |>
+  summarize(positive_rate = janitor::round_half_up(mean(p < .05), digits = 3)) |>
+  ungroup()
+
+simulation_summary |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+## Multiverse plot function
+
+```{r}
+
+multiverse_plot <- function(data, 
+                            outcome = "outcome", 
+                            outcome_name = "Outcome",
+                            interval_lower = NULL,
+                            interval_upper = NULL,
+                            rank_by = "rank",
+                            rank_by_outcome = FALSE,
+                            relative_height_of_upper_plot = 0.70, 
+                            outcome_cutoff = NULL){
+  
+  # dependencies
+  require(dplyr)
+  require(tidyr)
+  require(ggplot2)
+  require(ggtext)
+  
+  # TODO consider checking inputs with rlang::ensym(variable)
+
+  # rename outcome variable
+  data <- data |>
+    rename(outcome = {{outcome}},
+           rank = {{rank_by}})
+  
+  # if intervals aren't specified, set them to the same value as outcome (so they are invisible in the plot)
+  if(!is.null(interval_lower)){
+    data <- data |>
+      rename(interval_lower = {{interval_lower}})
+  } else {
+    data$interval_lower <- data$outcome
+  }
+  
+  if(!is.null(interval_upper)){
+    data <- data |>
+      rename(interval_upper = {{interval_upper}})
+  } else {
+    data$interval_upper <- data$outcome
+  }
+  
+  # if rank_by_outcome, rank by the outcome. otherwise, take order that was passed.
+  if(rank_by_outcome){
+    data <- data |>
+      arrange(outcome) |>
+      mutate(rank = row_number())
+  }
+  
+  # ensure all columns other than rank and outcome are factors
+  data <- data |>
+    mutate(across(.cols = -c(rank, outcome, interval_lower, interval_upper),
+                  .fns = as.factor))
+  
+  p_estimates <- data |>
+    mutate(outcome_name = outcome_name) |>
+    ggplot(aes(rank, outcome)) +
+    geom_linerange(aes(ymin = interval_lower, ymax = interval_upper)) +
+    geom_point(shape = "circle", size = 2) +
+    facet_grid(outcome_name ~ ., space = "free_y", scales = "free_y", switch = "y") +
+    scale_y_continuous(breaks = scales::pretty_breaks()) + 
+    scale_x_continuous(NULL, expand = c(.02, .02)) +
+    ylab("Simulation results") +
+    #theme_classic() +
+    theme_minimal() +
+    theme(legend.position = "none",
+          axis.line.x = element_blank(),
+          strip.placement = "outside",
+          strip.background = element_rect(fill = NA, colour = NA),
+          panel.spacing.x = unit(0.15, "cm"),
+          strip.text.y = element_markdown(angle = 180, face = "bold", size = 7),
+          axis.text.y = element_text(angle = 0, 
+                                     hjust = 0.5, 
+                                     size = 6),
+          axis.title.y = element_text(size = 9, face = "bold"),
+          panel.spacing = unit(0.25, "lines"),
+          axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank())
+  
+  if(!is.null(outcome_cutoff)){
+    p_estimates <- p_estimates + geom_hline(yintercept = outcome_cutoff, linetype = "dotted")
+  }
+  
+  p_specs <- data |> 
+    tidyr::pivot_longer(cols = c(-"rank", -"outcome", -"interval_lower", -"interval_upper")) |> 
+    arrange(rank) |>
+    ggplot(aes(x = rank, y = factor(value), color = name)) + 
+    geom_point(size = 2, shape = "square") +
+    facet_grid(name ~ ., space = "free_y", scales = "free_y", switch = "y") +
+    guides(color = "none") +
+    scale_x_continuous(NULL, expand = c(.02, .02)) +
+    ylab("Simulation conditions") +
+    #theme_classic() +
+    theme_minimal() +
+    theme(strip.placement = "outside",
+          strip.background = element_rect(fill = NA, colour = NA),
+          panel.spacing.x = unit(0.15, "cm"),
+          strip.text.y = element_markdown(angle = 180, face = "bold", size = 7),
+          axis.text.y = element_text(angle = 0, hjust = 1, size = 6),
+          axis.title.y = element_text(size = 9, face = "bold"),
+          panel.spacing = unit(0.25, "lines"),
+          axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank()) +
+    scale_color_brewer(palette = "Dark2")
+
+  p_multiverse <- cowplot::plot_grid(p_estimates, 
+                                     p_specs, 
+                                     axis = "bltr", 
+                                     align = "v", 
+                                     ncol = 1, 
+                                     rel_heights = c(relative_height_of_upper_plot, 1))
+  
+  return(p_multiverse)
+}
+
+```
+
+### Example 1
+
+Left-right order of conditions determined by their permutation.
+
+```{r}
+
+data_summary_ordered <- simulation_summary |>
+  # the outcome variable must be called `outcome`
+  # eg the estimand of your simulation, whether the false positive rate, estimated effect size, etc.
+  # replace `positive_rate` with
+  mutate(outcome = positive_rate) |>
+  
+  # order the rows within the columns in the way you want them to appear left to right
+  arrange(location_intervention, n_intervention, scale_intervention) |>
+  mutate(rank = row_number()) |>
+  
+  # # note that you might instead want to rank by the outcome variable rather than the conditions
+  # arrange(outcome) |>
+  # mutate(rank = row_number())
+  
+  # select only the columns that you had multiple values for in the expand.grid() call in the simulation as well as `outcome` and `rank`
+  # rename them if necessary to plot nicely
+  dplyr::select(`N per group` = n_control, 
+                #n_intervention, 
+                #location_control, 
+                `Population mean` = location_intervention, 
+                #scale_control, 
+                Variances = scale_intervention, 
+                #skew_control, 
+                #skew_intervention, 
+                outcome,
+                rank) |>
+  # if it would look better for plotting, you can recategorize some values as named factor levels
+  mutate(Variances = case_when(Variances == 1 ~ "Equal",
+                               Variances == 1.5 ~ "Unequal"))
+
+p_multiverse <- 
+  multiverse_plot(data_summary_ordered, 
+                  outcome_name = "Proportion p < .05")
+
+p_multiverse
+
+# # save to disk
+# ggsave(filename = "p_multiverse.pdf",
+#        plot = p_multiverse,
+#        device = "pdf",
+#        width = 6,
+#        height = 5)
+
+```
+
+### Example 2
+
+Left-right order of conditions still determined by their permutation. Also add a cutoff line, eg for "acceptable power" (>=.80).
+
+```{r}
+
+multiverse_plot(data_summary_ordered, 
+                outcome_name = "Proportion p < .05",
+                outcome_cutoff = 0.80)
+
+```
+
+### Example 3
+
+Left-right order of conditions still determined by their permutation. Add intervals on the estimates.
+
+```{r}
+
+data_summary_ordered |>
+  # create some dummy intervals to show they can be plotted too. doesn't make sense for p values, its just illustrative
+  mutate(interval_lower = outcome - 0.3, 
+         interval_upper = outcome + 0.3) |>
+  # plot
+  multiverse_plot(outcome_name = "Proportion p < .05",
+                  relative_height_of_upper_plot = 1, # increase size of upper plot 
+                  interval_lower = "interval_lower", # specify the interval columns
+                  interval_upper = "interval_upper")
+
+```
+
+### Example 4
+
+Left-right order of conditions determined by the ranked outcome variable. 
+
+```{r}
+
+data_summary_ordered <- simulation_summary |>
+  # the outcome variable must be called `outcome`
+  # eg the estimand of your simulation, whether the false positive rate, estimated effect size, etc.
+  # replace `positive_rate` with
+  mutate(outcome = positive_rate) |>
+  
+  # # note that you might instead want to rank by the outcome variable rather than the conditions
+  # arrange(outcome) |>
+  # mutate(rank = row_number())
+  
+  # select only the columns that you had multiple values for in the expand.grid() call in the simulation as well as `outcome` and `rank`
+  # rename them if necessary to plot nicely
+  dplyr::select(
+    `N per group` = n_control, 
+    #n_intervention, 
+    #location_control, 
+    Variances = scale_intervention, 
+    #scale_control, 
+    `Effect size` = location_intervention, 
+    #skew_control, 
+    #skew_intervention, 
+    outcome
+  ) |>
+  # if it would look better for plotting, you can recategorize some values as named factor levels
+  mutate(Variances = case_when(Variances == 1 ~ "Equal",
+                               Variances == 1.5 ~ "Unequal")) |>
+  
+  # order the rows within the columns in the way you want them to appear left to right
+  arrange(
+    `Effect size`, 
+    `N per group`, 
+    Variances,
+  ) |>
+  mutate(rank = row_number())
+
+p_current <- 
+  multiverse_plot(data_summary_ordered, 
+                  rank_by_outcome = TRUE,
+                  outcome_name = "Proportion p < .05")
+
+p_current
+
+# ggsave(filename = "p_3.pdf",
+#        plot = p_current,
+#        device = "pdf",
+#        width = 6,
+#        height = 5)
+
+```
+
+
+
+
+
