@@ -100,4 +100,10 @@ lesson 8 - conditional use of non parametric tests
 - needs more material on white boarding, which was done in class.
 - homogenisie the data generating functions so all sims have location and scale for each group, so it doesn't unnecessarily change between them.
 - - four pathways through the analysis: just to the H, do the A and ignore it then H, do H conditoinal on A, and do H but report A as a caution
-  - 
+
+
+
+lesson 10 - versions of cohen's d. 
+
+- make the lesson come earlier right after the writing functions one. As homework, have each students create a function for a different version/implementation of d, then use their functions in the analysis of versions of cohen's d.
+- Explain how to find out which cohen's d is appropriate to use
