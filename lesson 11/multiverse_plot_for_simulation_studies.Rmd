@@ -145,6 +145,8 @@ simulation_summary |>
 
 ## Multiverse plot function
 
+NB This function is now also available by loading `library(simulateR)`, which can be installed from `devtools::install_github("ianhussey/simulateR")`.
+
 ```{r}
 
 multiverse_plot <- function(data, 
@@ -161,8 +163,8 @@ multiverse_plot <- function(data,
   require(dplyr)
   require(tidyr)
   require(ggplot2)
-  require(ggtext)
-  
+  require(cowplot)
+
   # TODO consider checking inputs with rlang::ensym(variable)
 
   # rename outcome variable
