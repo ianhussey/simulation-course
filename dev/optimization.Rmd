@@ -1,0 +1,280 @@
+---
+title: "Optimising simulation code"
+subtitle: "To be faster and use less memory"
+author: "Ian Hussey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+# Overview
+
+The simulation workflow we have used in this course was chosen because it is the easiest one I have found to understand, teach, and learn, because it is written entirely in a tidyverse workflow and it saves all intermediate steps so you can inspect them later.
+
+However, because it saves all intermediate steps, the code can run slow and use a lot of memory. It's possible that larger simulations won't run on some hardware as you'll run out of memory. This document demonstrates an alternative, potentially faster and less memory-hungry workflow. It then uses benchmarking to assess whether it is indeed faster and less memory hungry.
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+```
+
+# Dependencies, functions, and parameters
+
+```{r}
+
+# dependencies
+library(dplyr)
+library(purrr)
+library(tidyr)
+library(sn)
+library(knitr)
+library(kableExtra)
+
+# define data generating function ----
+generate_data <- function(n_control,
+                          n_intervention,
+                          location_control, # location, akin to mean
+                          location_intervention,
+                          scale_control, # scale, akin to SD
+                          scale_intervention,
+                          skew_control, # slant/skew. When 0, produces normal/gaussian data
+                          skew_intervention) {
+  
+  data_control <- 
+    tibble(condition = "control",
+           score = rsn(n = n_control, 
+                       xi = location_control, # location, akin to mean
+                       omega = scale_control, # scale, akin to SD
+                       alpha = skew_control)) # slant/skew. When 0, produces normal/gaussian data
+  
+  data_intervention <- 
+    tibble(condition = "intervention",
+           score = rsn(n = n_intervention, 
+                       xi = location_intervention, # location, akin to mean
+                       omega = scale_intervention, # scale, akin to SD
+                       alpha = skew_intervention)) # slant/skew. When 0, produces normal/gaussian data
+  
+  data <- bind_rows(data_control,
+                    data_intervention) 
+  
+  return(data)
+}
+
+
+# define data analysis function ----
+analyse_data <- function(data) {
+  res_t_test <- t.test(formula = score ~ condition, 
+                       data = data,
+                       var.equal = FALSE,
+                       alternative = "two.sided")
+  
+  res <- tibble(p = res_t_test$p.value)
+  
+  return(res)
+}
+
+# define experiment parameters ----
+experiment_parameters_grid <- expand_grid(
+  n_control = c(50, 100, 150),
+  #n_intervention = 100,
+  location_control = 0,
+  location_intervention = c(0.0, 0.2, 0.5, 0.8), 
+  scale_control = 1,
+  scale_intervention = c(1, 1.5),
+  skew_control = 0,
+  skew_intervention = 0, 
+  iteration = 1:100
+) |>
+  mutate(n_intervention = n_control)
+
+```
+
+# Original workflow
+
+Used elsewhere in this course.
+
+```{r}
+
+set.seed(42)
+
+# run simulation ----
+simulation <- 
+  # using the experiment parameters
+  experiment_parameters_grid |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n_control,
+                                    n_intervention,
+                                    location_control,
+                                    location_intervention,
+                                    scale_control,
+                                    scale_intervention,
+                                    skew_control,
+                                    skew_intervention),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results = pmap(list(generated_data),
+                                 analyse_data)) |>
+  unnest(analysis_results)
+
+```
+
+# Potentially optimized workflow
+
+Does not save the data for each iteration. Should increase speed and reduce memory.
+
+```{r}
+
+set.seed(42)
+
+# helper function for the generate data and analyze data functions
+generate_and_analyse_data <- function(n_control, 
+                                      n_intervention, 
+                                      location_control,
+                                      location_intervention, 
+                                      scale_control, 
+                                      scale_intervention, 
+                                      skew_control, 
+                                      skew_intervention, 
+                                      iteration) {
+    
+  # generate data
+  data <- generate_data(n_control, 
+                        n_intervention, 
+                        location_control, 
+                        location_intervention, 
+                        scale_control, 
+                        scale_intervention, 
+                        skew_control, 
+                        skew_intervention)
+  
+  # results
+  res <- analyse_data(data)
+  
+  return(res)
+}
+
+# run simulation ----
+simulation_optimised <- 
+  bind_cols(
+    experiment_parameters_grid,
+    pmap_dfr(experiment_parameters_grid, generate_and_analyse_data)
+  ) 
+
+```
+
+# Compare
+
+## Are the results identical?
+
+```{r}
+
+identical(simulation$p, simulation_optimised$p)
+
+```
+
+## Size of obtained results in memory
+
+Once we have the results, how much memory do they take up?
+
+It's useful to ask this for 1. the original simulation workflow, 2. the original workflow but dropping the generated_data column, and 3. the optimised workflow.
+
+```{r}
+
+size_original <- object.size(simulation)
+print(size_original, units = "MB", standard = "SI")
+
+size_original_dropped_data <- object.size(simulation |> select(-generated_data))
+print(size_original_dropped_data, units = "MB", standard = "SI")
+
+size_optimised <- object.size(simulation_optimised)
+print(size_optimised, units = "MB", standard = "SI")
+
+```
+
+## Compare speed and memory usage while running each
+
+```{r}
+
+#install.packages("bench")
+library(bench)
+
+# compare memory usage and runtime
+results <- bench::mark(
+  implementation_1 = {
+    
+    set.seed(42)
+    
+    simulation <- 
+      # using the experiment parameters
+      experiment_parameters_grid |>
+      
+      # generate data using the data generating function and the parameters relevant to data generation
+      mutate(generated_data = pmap(list(n_control,
+                                        n_intervention,
+                                        location_control,
+                                        location_intervention,
+                                        scale_control,
+                                        scale_intervention,
+                                        skew_control,
+                                        skew_intervention),
+                                   generate_data)) |>
+      
+      # apply the analysis function to the generated data using the parameters relevant to analysis
+      mutate(analysis_results = pmap(list(generated_data),
+                                     analyse_data)) |>
+      
+      # bench::mark() requires the outputs of the two to be identical. to accomplish this, change the output slightly:
+      ## unnest the results
+      unnest(analysis_results) |>
+      ## drop the generated_data column 
+      select(-generated_data)
+    
+  },
+  implementation_2 = {
+    
+    set.seed(42)
+    
+    simulation_optimised <- 
+      bind_cols(
+        experiment_parameters_grid,
+        pmap_dfr(experiment_parameters_grid, generate_and_analyse_data)
+      ) 
+    
+  },
+  iterations = 10,
+  # check = FALSE,
+  memory = TRUE,
+  time_unit = "s" 
+)
+
+# print the results
+results |>
+  select(implementation = expression,
+         minimum_time_in_seconds = min,
+         median_time_in_seconds = median,
+         total_time_in_seconds = total_time,
+         mem_alloc) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+- Negligible gains. Needs more thought on how to optimize. Perhaps it would require a more extensive rewrite.
+- Note that if 1000 iterations are used, mem_alloc reaches 1.5GB. 
+
+# Session info
+
+```{r}
+
+sessionInfo()
+
+```
+
+
