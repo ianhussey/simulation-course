@@ -107,3 +107,11 @@ lesson 10 - versions of cohen's d.
 
 - make the lesson come earlier right after the writing functions one. As homework, have each students create a function for a different version/implementation of d, then use their functions in the analysis of versions of cohen's d.
 - Explain how to find out which cohen's d is appropriate to use
+
+
+
+change from existing manual data generation function to faux::sim_design? it can do nesting for us
+
+
+
+add bug testing - eg leaving hard coded variables inside functions when they're also listed as parameters. or having a testing data definition inside the function
