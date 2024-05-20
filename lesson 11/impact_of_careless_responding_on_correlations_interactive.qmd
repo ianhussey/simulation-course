@@ -7,6 +7,8 @@ format:
 server: shiny
 ---
 
+**Note that if this app doesn't run properly when you click "Run document", e.g., if it opens a 404 page on the faux website, look in the console for the localhost address and open this in your browser. 
+
 
 Careless responding can substantially distort observed correlations between variables, even when careless responding is random (i.e., follows a uniform distribution and is uncorrelated between variables). 
 
@@ -238,5 +240,3 @@ output$plot1 <- renderPlot({
 width = 1250)
 
 ```
-
-
