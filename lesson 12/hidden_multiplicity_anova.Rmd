@@ -1,0 +1,539 @@
+---
+title: "Hidden multiplicity in multi-way ANOVA"
+author: "Ian Hussey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+# TODO
+
+- flexibility sims don't produce the same numbers as static ones, despite using same data. sth's off
+- flexibility sims don't convey the point well: i'm trying to say that simpler models get reported sometimes. how to capture which models the sig results came from? rank results and provide counts of the number of IVs in the final results? ie what's the distribution of IVs in the reported results?
+- needs frontmatter on how ANOVA is taught as though it controls familywise error but doesn't. 
+- and middle matter on how holm corrects can restore the FPR==alpha.
+- is it feasible to add other configural models, eg. x1 * x3? this would blow up FPR further. but by how much?
+- add in this or another less correlated outcome variables, talk about conjunctive vs disjunctive claims.
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+```
+
+# Simulations
+
+## Arbitrary numbrer of between groups conditions with two levels each
+
+Arbitrary number of 2X between factors.
+
+Here I employ up to 4, so it's a maximum of a 2 X 2 X 2 X 2 ANOVA. For example, a 2 (intervention vs control) X 2 (men vs women) X 2 (LGBTQ+ vs straight) X 2 (right-handed vs left-handed) design. 
+
+```{r}
+
+# dependencies ----
+library(tidyr)
+library(dplyr)
+library(tibble)
+library(purrr) 
+library(faux)
+library(janitor)
+library(afex)
+library(knitr)
+library(kableExtra)
+
+
+# define generate data function ----
+generate_data <- function(n,
+                          ivs,
+                          mu = 0,
+                          sd = 1) { 
+
+  n_iv <- function(n) {
+    strings <- paste(sapply(1:n, function(i) paste0("x", i, " = c(group1 = 'Condition 1', group2 = 'Condition 2')")), collapse = ", ") 
+    single_string <- paste(strings, collapse = ", ")
+    list_string <- paste0("list(", single_string, ")")
+    return(list_string)
+  }
+  
+  data <- sim_design(between = eval(parse(text = n_iv(ivs))), 
+                     n = 100, 
+                     mu = mu, 
+                     sd = sd,
+                     plot = FALSE) |>
+    mutate(id = as.factor(id))
+  
+  return(data)
+}
+
+# define data analysis function ----
+analyse_data <- function(data, ivs) {
+  
+  # generate a list of IVs
+  generate_c_string <- function(n) {
+    sapply(1:n, function(i) paste0("x", i))
+  }
+  
+  # define contrasts option so it doesn't print message on every iteration
+  options(contrasts = c("contr.sum", "contr.poly"))
+  
+  fit <- afex::aov_ez(
+    id = "id", 
+    dv = "y", 
+    between = generate_c_string(ivs), 
+    data = data,
+    anova_table = "pes"
+  )
+  
+  results <- fit$anova_table |>
+    rownames_to_column(var = "parameter") |>
+    rename(p = `Pr(>F)`,
+           partia_eta_2 = pes,
+           num_df = `num Df`,
+           den_df = `den Df`)
+
+  return(results)
+}
+
+
+# set seed
+set.seed(42)
+
+
+# simulation conditions ----
+experiment_parameters_grid <- expand_grid(
+  n = 100, #n = c(40, 80, 120),
+  ivs = 4,
+  mu = 0,
+  sd = 1, 
+  iteration = 1:10
+)
+
+# run simulation ----
+simulation <- 
+  # using the experiment parameters
+  experiment_parameters_grid |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n,
+                                    ivs,
+                                    mu,
+                                    sd),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results = pmap(list(generated_data,
+                                      ivs),
+                                 analyse_data))
+
+```
+
+The simulations are fit in a slightly non traditional way. Instead of passing a single `ivs` variable with multiple values to the expand grid, we give this just one value - the one for the max number of IVs. When then analyze the same generated data multiple ways, using different numbers of IVs: ivs, ivs - 1, ... 1. This also requires some wrangling of the results. 
+
+This simulates a situation where people report the ANOVA as one of:
+
+- 2 (intervention vs control)
+- 2 (intervention vs control) X 2 (men vs women) 
+- 2 (intervention vs control) X 2 (men vs women) X 2 (LGBTQ+ vs straight)
+- 2 (intervention vs control) X 2 (men vs women) X 2 (LGBTQ+ vs straight) X 2 (right-handed vs left-handed) 
+
+where they added an additional IV if the simpler one didn't produce significant results.
+
+```{r}
+
+# define generate data function ----
+generate_data <- function(n,
+                          ivs_generated,
+                          mu = 0,
+                          sd = 1) { 
+
+  n_iv <- function(n) {
+    strings <- paste(sapply(1:n, function(i) paste0("x", i, " = c(group1 = 'Condition 1', group2 = 'Condition 2')")), collapse = ", ") 
+    single_string <- paste(strings, collapse = ", ")
+    list_string <- paste0("list(", single_string, ")")
+    return(list_string)
+  }
+  
+  data <- sim_design(between = eval(parse(text = n_iv(ivs_generated))), 
+                     n = n, 
+                     mu = mu, 
+                     sd = sd,
+                     plot = FALSE) |>
+    mutate(id = as.factor(id))
+  
+  return(data)
+}
+
+# define data analysis function ----
+analyse_data <- function(data, ivs_analyzed) {
+  
+  # generate a list of IVs
+  generate_c_string <- function(n) {
+    sapply(1:n, function(i) paste0("x", i))
+  }
+  
+  # define contrasts option so it doesn't print message on every iteration
+  options(contrasts = c("contr.sum", "contr.poly"))
+  
+  fit <- afex::aov_ez(
+    id = "id", 
+    dv = "y", 
+    between = generate_c_string(ivs_analyzed), 
+    data = data,
+    anova_table = "pes"
+  )
+  
+  results <- fit$anova_table |>
+    rownames_to_column(var = "parameter") |>
+    rename(p = `Pr(>F)`,
+           partiaeta2 = pes,
+           numdf = `num Df`,
+           dendf = `den Df`)
+
+  return(results)
+}
+
+
+# set seed
+set.seed(42)
+
+
+# simulation conditions ----
+experiment_parameters_grid <- expand_grid(
+  n = 100, #n = c(40, 80, 120),
+  ivs_generated = 4,
+  mu = 0,
+  sd = 1, 
+  iteration = 1:1000
+)
+
+# run simulation ----
+simulation <- 
+  # using the experiment parameters
+  experiment_parameters_grid |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n,
+                                    ivs_generated,
+                                    mu,
+                                    sd),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(res1 = pmap(list(generated_data,
+                          ivs_analyzed = 1),
+                     analyse_data)) |>
+  
+  mutate(res2 = pmap(list(generated_data,
+                          ivs_analyzed = 2),
+                     analyse_data)) |>
+  
+  mutate(res3 = pmap(list(generated_data,
+                          ivs_analyzed = 3),
+                     analyse_data)) |>
+  
+  mutate(res4 = pmap(list(generated_data,
+                          ivs_analyzed = 4),
+                     analyse_data))
+
+```
+
+### Full reporting, no flexibility
+
+```{r}
+
+simulation_temp <- 
+  bind_rows(
+    simulation |>
+      unnest(res1) |>
+      select(-starts_with("res")) |>
+      mutate(ivs_analysed = 1),
+    simulation |>
+      unnest(res2) |>
+      select(-starts_with("res")) |>
+      mutate(ivs_analysed = 2),
+    simulation |>
+      unnest(res3) |>
+      select(-starts_with("res")) |>
+      mutate(ivs_analysed = 3),
+    simulation |>
+      unnest(res4) |>
+      select(-starts_with("res")) |>
+      mutate(ivs_analysed = 4)
+  ) |>
+  select(iteration, mu, sd, n, ivs = ivs_analysed, parameter, p)
+
+simulation_summary <- simulation_temp |>
+  group_by(iteration, mu, sd, n, ivs) |>
+  mutate(p_adjusted = p.adjust(p, method = "holm")) |>
+  summarize(any_sig = max(p < .05),
+            any_adjusted_sig = max(p_adjusted < .05)) |>
+  ungroup() |>
+  group_by(mu, sd, n, ivs) |>
+  summarize(proportion_positive_results = mean(any_sig),
+            proportion_positive_adjusted_results = mean(any_adjusted_sig)) |>
+  # simulation wasn't strictly needed - positive rate can be calculated a from the number of IVs assuming all results from the ANOVA are interpreted
+  mutate(n_hypothesis_tests = 2^ivs - 1, # for a given number of IVs, there are 2^IVs - 1 number of hypothesis tests (main + interaction effects)
+         math_proportion_positive_results = 1 - (0.95^n_hypothesis_tests), # for a given number of hypothesis tests (main + interaction effects), the false positive rate is 1 - ((1-alpha)^n_hypothesis_tests)
+         math_proportion_positive_results = janitor::round_half_up(math_proportion_positive_results, digits = 3))
+
+simulation_summary |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+### Selective reporting, flexibility based on significance
+
+Report results from whatever value of `ivs` that yield's a significant result. This mimics the somewhat common practice of researchers stating that "no differences were found between groups on variable X1, so it was dropped from subsequent analyses".
+
+Note that the flexibility of the analysis is in the serial adding/dropping of IVs from x1 ... xn in numerical order (e.g., including x1, or x1 and x2, or x1:x3, etc). That is, no ANOVA is ever fit for `y ~ x2 * x4` or other permutations where the IVs aren't included/omitted by numerical order. The selective reporting strategy that tries even more models (e.g., all permutations) would therefore produce even higher false positives.
+
+```{r}
+
+simulation_summary_selective_reporting <- simulation_temp |>
+  group_by(iteration, mu, sd, n) |>
+  mutate(p_adjusted = p.adjust(p, method = "holm")) |>
+  summarize(any_sig = max(p < .05),
+            any_adjusted_sig = max(p_adjusted < .05)) |>
+  ungroup() |>
+  group_by(mu, sd, n) |>
+  summarize(proportion_positive_results = mean(any_sig),
+            proportion_positive_adjusted_results = mean(any_adjusted_sig))
+
+simulation_summary_selective_reporting |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+- \TODO WHY IS THIS PROPORTION LOWER THAN NON FLEXIBLE?
+
+## Example mixed-within RM-ANOVA
+
+4 X 2 X 2 mixed within-between with selective reporting of the second 2x.
+
+This simulates a common data analysis and reporting practice in literature using the Implicit Relational Assessment Procedure: either a 4 (within) X 2 (between: experiment condition) ANOVA or a 4 (within) X 2 (between: experiment condition) X 2 (between: block order) ANOVA, flexibly including the block order in the analysis based on what yield's significant results. Note that some constraints are also applied: parameters for the block order effects by themselves aren't reported, only the other parameters or the three way interaction.  
+
+```{r}
+
+# dependencies ----
+library(tidyr)
+library(dplyr)
+library(tibble)
+library(purrr) 
+library(faux)
+library(janitor)
+library(afex)
+library(knitr)
+library(kableExtra)
+
+
+# define generate data function ----
+generate_data <- function(n,
+                          generated_between_ivs,
+                          mu = 0,
+                          sd = 1,
+                          r = 0.25) {  # choose a value for r from the meta-analysis
+  
+  n_iv <- function(n) {
+    strings <- paste(sapply(1:n, function(i) paste0("x", i, " = c(group1 = 'Condition 1', group2 = 'Condition 2')")), collapse = ", ") 
+    single_string <- paste(strings, collapse = ", ")
+    list_string <- paste0("list(", single_string, ")")
+    return(list_string)
+  }
+  
+  data <- sim_design(within = list(trial_type = c(tt1 = 'Trial type 1',
+                                                  tt2 = 'Trial type 2',
+                                                  tt3 = 'Trial type 3',
+                                                  tt4 = 'Trial type 4')),
+                     between = eval(parse(text = n_iv(generated_between_ivs))), 
+                     n = n, 
+                     mu = mu, 
+                     sd = sd,
+                     r = r, 
+                     long = TRUE,
+                     plot = FALSE) |>
+    mutate(id = as.factor(id))
+  
+  return(data)
+}
+
+# define data analysis function ----
+analyse_data <- function(data, between_ivs_analyzed) {
+  
+  # generate a list of IVs
+  generate_c_string <- function(n) {
+    sapply(1:n, function(i) paste0("x", i))
+  }
+  
+  # define contrasts option so it doesn't print message on every iteration
+  options(contrasts = c("contr.sum", "contr.poly"))
+  
+  fit <- afex::aov_ez(
+    id = "id", 
+    dv = "y", 
+    between = generate_c_string(between_ivs_analyzed), 
+    within = "trial_type", 
+    data = data,
+    anova_table = "pes"
+  )
+  
+  results <- fit$anova_table |>
+    as.data.frame() |>
+    rownames_to_column(var = "parameter") |>
+    rename(p = `Pr(>F)`,
+           partiaeta2 = pes,
+           numdf = `num Df`,
+           dendf = `den Df`)
+
+  return(results)
+}
+
+
+# set seed
+set.seed(42)
+
+
+# simulation conditions ----
+experiment_parameters_grid <- expand_grid(
+  n = 100, #n = c(40, 80, 120),
+  generated_between_ivs = 2,
+  mu = 0,
+  sd = 1, 
+  r = 0,
+  iteration = 1:1000
+)
+
+# run simulation ----
+simulation <- 
+  # using the experiment parameters
+  experiment_parameters_grid |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n,
+                                    generated_between_ivs,
+                                    mu,
+                                    sd,
+                                    r),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(res1 = pmap(list(generated_data,
+                          between_ivs_analyzed = 1),
+                     analyse_data)) |>
+  
+  mutate(res2 = pmap(list(generated_data,
+                          between_ivs_analyzed = 2),
+                     analyse_data)) 
+
+```
+
+### Full reporting, no flexibility
+
+```{r}
+
+simulation_temp <- 
+  bind_rows(
+    simulation |>
+      unnest(res1) |>
+      select(-starts_with("res")) |>
+      mutate(between_ivs_analysed = 1),
+    simulation |>
+      unnest(res2) |>
+      select(-starts_with("res")) |>
+      mutate(between_ivs_analysed = 2)
+  ) |>
+  select(iteration, mu, sd, n, ivs = between_ivs_analysed, parameter, p) |>
+  filter(parameter %in% c("x1",
+                          "trial_type",
+                          "x1:trial_type",
+                          #"x2", 
+                          #"x1:x2",
+                          #"x2:trial_type",
+                          "x1:x2:trial_type"))
+
+simulation_summary <- simulation_temp |>
+  group_by(iteration, mu, sd, n, ivs) |>
+  summarize(any_sig = max(p < .05)) |>
+  ungroup() |>
+  group_by(mu, sd, n, ivs) |>
+  summarize(proportion_positive_results = mean(any_sig)) 
+
+simulation_summary |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+### Selective reporting, flexibility based on significance
+
+ignoring block order effects other than the three way interaction
+
+```{r}
+
+simulation_summary_selective_reporting <- simulation_temp |>
+  group_by(iteration, mu, sd, n) |>
+  summarize(any_sig = max(p < .05)) |>
+  ungroup() |>
+  group_by(mu, sd, n) |>
+  summarize(proportion_positive_results = mean(any_sig)) 
+
+simulation_summary_selective_reporting |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+### Selective reporting, flexibility based on significance
+
+considering all possible effects
+
+```{r}
+
+simulation_temp_2 <- 
+  bind_rows(
+    simulation |>
+      unnest(res1) |>
+      select(-starts_with("res")) |>
+      mutate(between_ivs_analysed = 1),
+    simulation |>
+      unnest(res2) |>
+      select(-starts_with("res")) |>
+      mutate(between_ivs_analysed = 2)
+  ) |>
+  select(iteration, mu, sd, n, ivs = between_ivs_analysed, parameter, p)
+
+simulation_summary_selective_reporting_2 <- simulation_temp_2 |>
+  group_by(iteration, mu, sd, n) |>
+  summarize(any_sig = max(p < .05)) |>
+  ungroup() |>
+  group_by(mu, sd, n) |>
+  summarize(proportion_positive_results = mean(any_sig)) 
+
+simulation_summary_selective_reporting_2 |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+# Check your understanding
+
+- does the FPR depend on the sample size?
+- does the FPR depend on whether how many levels the IV has? e.g., 2X vs. 3X etc? why/why not?
+- when one of the IVs is within-subjects, does the FPR depend on the correlation between the time points? why/why not?
+- under what situations would the opposite occur, i.e. would these go from mattering to not mattering or vice versa?
+
+# Session info
+
+```{r}
+
+sessionInfo()
+
+```
+
+
