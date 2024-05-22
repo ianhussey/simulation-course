@@ -115,3 +115,11 @@ change from existing manual data generation function to faux::sim_design? it can
 
 
 add bug testing - eg leaving hard coded variables inside functions when they're also listed as parameters. or having a testing data definition inside the function
+
+
+
+in an EARLY week, make them aware of full factorial vs one-at-a-time simulations. report results using one-at-a-time in the first instance for the first few lessons, then expand to full factorial and add the multiverse plot.
+
+
+
+ 
