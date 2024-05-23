@@ -1,3 +1,23 @@
+# Summary of changes to make:
+
+The early weeks should do one-at-a-time simulations rather than full factorial designs.
+
+The early weeks should introduce multiverse plots alongside full factorial designs.
+
+The box analogy for tidy/nested data needs to be discussed earlier and more explicitly, possibly with counterexamples.
+
+When talking about core components, talk about the core skill of mapping ideas/researcher behaviors onto code. Give an example of assumption checks and conditional inference tests, which will come in later weeks.
+
+maybe change to quarto? 
+
+standardize YAML headers
+
+swap manual data collection for faux::sim_design? 
+
+
+
+# Messy notes, week by week:
+
 nested data structures needed to be discussed a lot in class, some didn't really get them. Expand on this in the lesson, to show that you can build them yourself, and to show that the simulation structure allows you to scrutinise them.
 
 the metafor of workers with boxes was helpful - each step in the process is a worker taking its object in and out of a box, and passing that box to the next worker, rather than passing the individuals items in the box.
