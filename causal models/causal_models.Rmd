@@ -187,6 +187,8 @@ generate_data <- function(n,
 
 # Plot causal models
 
+Explain briefly why there's no fourth 3-variable model, ie because DAGs must be a-cyclic, they cant have causal loops, and the fourth model would have Y -> M -> X -> Y. 
+
 ```{r}
 
 library(semPlot)
@@ -199,7 +201,7 @@ mod_multipleregression    <- "Y ~ 0.5*X + 0.5*M; M ~~ 0.0*X"
 
 mod_mediation             <- "Y ~ 0.5*M + 0.0*X; M ~ 0.5*X" # 0.71 * 0.71 = 0.5 indirect effect ?
 mod_confounder            <- "Y ~ 0.0*X + 0.5*M; X ~ 0.5*M"
-mod_collider              <- "M ~ 0.5*X + 0.5*Y; Y ~~ 0.0*X"
+mod_collider              <- "M ~ 0.5*X + 0.5*Y; Y ~ 0.0*X"
 mod_network               <- "Y ~~ 0.5*X; Y ~~ 0.5*M; M ~~ 0.5*X"
 
 
@@ -320,8 +322,8 @@ title(main = "Confounder", adj = 0)
 
 # collider 
 layout_matrix <- matrix(c( 0,  1,
-                          -1,  0,
-                           1,  0), 
+                           1,  0,
+                          -1,  0), 
                         ncol = 2, 
                         byrow = TRUE)
 
@@ -340,10 +342,10 @@ title(main = "Collider", adj = 0)
 ```{r include=FALSE}
 
 # save the same plots to disk
-dir.create("causal_models_plots")
+dir.create("plots")
 
 # bivariate correlation
-pdf(file = "causal_models_plots/1_bivariate_correlation.pdf", width = 6, height = 5)
+pdf(file = "plots/1_bivariate_correlation.pdf", width = 6, height = 5)
 
 layout_matrix <- matrix(c( 1,  0,
                           -1,  0), 
@@ -362,7 +364,7 @@ title(main = "Bivariate correlation", adj = 0)
 dev.off()
 
 # simple regression
-pdf(file = "causal_models_plots/2_simple_regression.pdf", width = 6, height = 5)
+pdf(file = "plots/2_simple_regression.pdf", width = 6, height = 5)
 
 layout_matrix <- matrix(c( 1,  0,
                           -1,  0), 
@@ -381,7 +383,7 @@ title(main = "Simple regression", adj = 0)
 dev.off()
 
 # simple regression reversed causation
-pdf(file = "causal_models_plots/3_simple_regression_reversed.pdf", width = 6, height = 5)
+pdf(file = "plots/3_simple_regression_reversed.pdf", width = 6, height = 5)
 
 layout_matrix <- matrix(c(-1,  0,
                            1,  0), 
@@ -400,7 +402,7 @@ title(main = "Simple regression (opposite direction of causation)", adj = 0)
 dev.off()
 
 # network
-pdf(file = "causal_models_plots/4_network_of_correlations.pdf", width = 6, height = 5)
+pdf(file = "plots/4_network_of_correlations.pdf", width = 6, height = 5)
 
 layout_matrix <- matrix(c( 1,  0,
                            0,  1,
@@ -421,7 +423,7 @@ dev.off()
 
 
 # multiple regression
-pdf(file = "causal_models_plots/5_multiple_regression.pdf", width = 6, height = 5)
+pdf(file = "plots/5_multiple_regression.pdf", width = 6, height = 5)
 
 layout_matrix <- matrix(c( 1,  0,
                           -1,  0,
@@ -441,7 +443,7 @@ title(main = "Multiple regression", adj = 0)
 dev.off()
 
 # mediation
-pdf(file = "causal_models_plots/6_mediation.pdf", width = 6, height = 5)
+pdf(file = "plots/6_mediation.pdf", width = 6, height = 5)
 
 layout_matrix <- matrix(c( 1,  0,
                            0,  1,
@@ -461,7 +463,7 @@ title(main = "Mediator", adj = 0)
 dev.off()
 
 # confounder
-pdf(file = "causal_models_plots/7_confounder.pdf", width = 6, height = 5)
+pdf(file = "plots/7_confounder.pdf", width = 6, height = 5)
 
 layout_matrix <- matrix(c( 1,  0,
                           -1,  0,
@@ -481,11 +483,11 @@ title(main = "Confounder", adj = 0)
 dev.off()
 
 # collider 
-pdf(file = "causal_models_plots/8_collider.pdf", width = 6, height = 5)
+pdf(file = "plots/8_collider.pdf", width = 6, height = 5)
 
 layout_matrix <- matrix(c( 0,  1,
-                          -1,  0,
-                           1,  0), 
+                           1,  0,
+                          -1,  0), 
                         ncol = 2, 
                         byrow = TRUE)
 
@@ -1325,7 +1327,7 @@ ggplot(simulation_summary, aes(population_model_description, mean_YX_estimate, f
        subtitle = "Population effect of X on Y is always 0") +
   theme_linedraw()
 
-ggsave("causal_models_multiple_causal_models_one_analysis.pdf",
+ggsave("plots/causal_models_multiple_causal_models_one_analysis.pdf",
        width = 6,
        height = 4)
 
