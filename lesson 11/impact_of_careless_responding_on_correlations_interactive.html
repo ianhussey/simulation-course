@@ -65,6 +65,49 @@ ul.task-list li input[type="checkbox"] {
 
 </header>
 
+<div class="panel-grid layout-sidebar ms-md-0 layout-sidebar-left">
+<div class="cell panel-sidebar card bg-light p-2 g-col-24 g-col-lg-7">
+<div class="cell-output-display">
+<div class="form-group shiny-input-container" style="width:50%;">
+<label class="control-label" id="n-label" for="n">Total sample size</label>
+<input id="n" type="number" class="shiny-input-number form-control" value="800" min="40" max="10000" step="50">
+</div>
+</div>
+<div class="cell-output-display">
+<div class="form-group shiny-input-container" style="width:50%;">
+<label class="control-label" id="prob_careless-label" for="prob_careless">Proportion of careless responders</label>
+<input id="prob_careless" type="number" class="shiny-input-number form-control" value="0.15" min="0" max="0.99" step="0.05">
+</div>
+</div>
+<div class="cell-output-display">
+<div class="form-group shiny-input-container" style="width:50%;">
+<label class="control-label" id="rho_careful-label" for="rho_careful">Population correlation</label>
+<input id="rho_careful" type="number" class="shiny-input-number form-control" value="0" min="-1" max="1" step="0.1">
+</div>
+</div>
+<div class="cell-output-display">
+<div class="form-group shiny-input-container" style="width:50%;">
+<label class="control-label" id="mu_x_careful-label" for="mu_x_careful">Population mean of X</label>
+<input id="mu_x_careful" type="number" class="shiny-input-number form-control" value="2" min="1" max="7" step="0.25">
+</div>
+</div>
+<div class="cell-output-display">
+<div class="form-group shiny-input-container" style="width:50%;">
+<label class="control-label" id="mu_y_careful-label" for="mu_y_careful">Population mean of Y</label>
+<input id="mu_y_careful" type="number" class="shiny-input-number form-control" value="2" min="1" max="7" step="0.25">
+</div>
+</div>
+</div>
+<div class="panel-center panel-grid g-col-24 g-col-lg-17 pt-3 pt-lg-0">
+<div class="g-col-24 g-col-lg-20 g-start-lg-2">
+<div class="cell panel-center">
+<div class="cell-output-display">
+<div class="shiny-plot-output html-fill-item" id="plot1" style="width:100%;height:400px;"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
 <p>**Note that if this app doesn’t run properly when you click “Run document”, e.g., if it opens a 404 page on the faux website, look in the console for the localhost address and open this in your browser.</p>
 <p>Careless responding can substantially distort observed correlations between variables, even when careless responding is random (i.e., follows a uniform distribution and is uncorrelated between variables).</p>
 <p>Observed correlations can be <strong>created</strong> from nothing when population correlation is zero and the population means diverge from the center of the scale (eg 4 on a 1-7 Likert scale) in the same direction.</p>
@@ -83,47 +126,6 @@ ul.task-list li input[type="checkbox"] {
 <ul>
 <li>e.g., mean x = 4, mean y = 4, for any value of population correlation</li>
 </ul>
-<div class="cell panel-input card bg-light p-2">
-<div class="cell-output-display">
-<div class="form-group shiny-input-container">
-<label class="control-label" id="n-label" for="n">Total sample size</label>
-<input id="n" type="number" class="shiny-input-number form-control" value="800" min="40" max="10000" step="50">
-</div>
-</div>
-<div class="cell-output-display">
-<div class="form-group shiny-input-container">
-<label class="control-label" id="prob_careless-label" for="prob_careless">Proportion of careless responders</label>
-<input id="prob_careless" type="number" class="shiny-input-number form-control" value="0.15" min="0" max="0.99" step="0.05">
-</div>
-</div>
-<div class="cell-output-display">
-<div class="form-group shiny-input-container">
-<label class="control-label" id="rho_careful-label" for="rho_careful">Population correlation</label>
-<input id="rho_careful" type="number" class="shiny-input-number form-control" value="0" min="-1" max="1" step="0.1">
-</div>
-</div>
-<div class="cell-output-display">
-<div class="form-group shiny-input-container">
-<label class="control-label" id="mu_x_careful-label" for="mu_x_careful">Population mean of X</label>
-<input id="mu_x_careful" type="number" class="shiny-input-number form-control" value="2" min="1" max="7" step="0.25">
-</div>
-</div>
-<div class="cell-output-display">
-<div class="form-group shiny-input-container">
-<label class="control-label" id="mu_y_careful-label" for="mu_y_careful">Population mean of Y</label>
-<input id="mu_y_careful" type="number" class="shiny-input-number form-control" value="2" min="1" max="7" step="0.25">
-</div>
-</div>
-</div>
-<div class="panel-fill panel-grid">
-<div class="g-col-24">
-<div class="cell panel-fill">
-<div class="cell-output-display">
-<div class="shiny-plot-output html-fill-item" id="plot1" style="width:100%;height:400px;"></div>
-</div>
-</div>
-</div>
-</div>
 <p>
 <script type="application/shiny-prerendered" data-context="server">
 library(tidyr)

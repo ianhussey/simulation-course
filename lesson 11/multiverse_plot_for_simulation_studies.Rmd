@@ -164,6 +164,7 @@ multiverse_plot <- function(data,
   require(tidyr)
   require(ggplot2)
   require(cowplot)
+  require(ggtext)
 
   # TODO consider checking inputs with rlang::ensym(variable)
 
@@ -276,13 +277,13 @@ data_summary_ordered <- simulation_summary |>
   # replace `positive_rate` with
   mutate(outcome = positive_rate) |>
   
-  # order the rows within the columns in the way you want them to appear left to right
-  arrange(location_intervention, n_intervention, scale_intervention) |>
+  # # order the rows within the columns in the way you want them to appear left to right
+  # arrange(location_intervention, n_intervention, scale_intervention) |>
+  # mutate(rank = row_number()) |>
+
+  # note that you might instead want to rank by the outcome variable rather than the conditions
+  arrange(outcome) |>
   mutate(rank = row_number()) |>
-  
-  # # note that you might instead want to rank by the outcome variable rather than the conditions
-  # arrange(outcome) |>
-  # mutate(rank = row_number())
   
   # select only the columns that you had multiple values for in the expand.grid() call in the simulation as well as `outcome` and `rank`
   # rename them if necessary to plot nicely

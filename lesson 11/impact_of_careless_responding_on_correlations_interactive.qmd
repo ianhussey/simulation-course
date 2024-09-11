@@ -7,38 +7,17 @@ format:
 server: shiny
 ---
 
-**Note that if this app doesn't run properly when you click "Run document", e.g., if it opens a 404 page on the faux website, look in the console for the localhost address and open this in your browser. 
-
-
-Careless responding can substantially distort observed correlations between variables, even when careless responding is random (i.e., follows a uniform distribution and is uncorrelated between variables). 
-
-Observed correlations can be **created** from nothing when population correlation is zero and the population means diverge from the center of the scale (eg 4 on a 1-7 Likert scale) in the same direction.
-
-- e.g., population correlation = 0, mean x = 2, mean y = 2
-
-Observed correlations can be **inflated** when population correlation is non-zero and the population means diverge from the center of the scale (eg 4 on a 1-7 Likert scale) in the same direction
-
-- e.g., population correlation = 0.2, mean x = 2, mean y = 2
-
-Observed correlations can be **diluted** when population correlation is non-zero and the population means diverge from the center of the scale (eg 4 on a 1-7 Likert scale) in the opposite directions
-
-- e.g., population correlation = 0.2, mean x = 2, mean y = 6
-
-Observed correlations are also **diluted** when the mean of both X and Y variables are at the center of the scale (eg 4 on a 1-7 Likert scale), but in this case they are dilulted by the addition of the extra random noise rather than systematically biased.
-
-- e.g., mean x = 4, mean y = 4, for any value of population correlation
-
 ```{r}
-#| panel: input
-numericInput('n', 'Total sample size', 800, min = 40, max = 10000, step = 50)
-numericInput('prob_careless', 'Proportion of careless responders', 0.15, min = 0, max = .99, step = 0.05)
-numericInput('rho_careful', 'Population correlation', 0, min = -1, max = 1, step = 0.1)
-numericInput('mu_x_careful', 'Population mean of X', 2, min = 1, max = 7, step = 0.25)
-numericInput('mu_y_careful', 'Population mean of Y', 2, min = 1, max = 7, step = 0.25)
+#| panel: sidebar
+numericInput(inputId = 'n', label = 'Total sample size', value = 800, min = 40, max = 10000, step = 50, width = "50%")
+numericInput(inputId = 'prob_careless', label = 'Proportion of careless responders', value = 0.15, min = 0, max = .99, step = 0.05, width = "50%")
+numericInput(inputId = 'rho_careful', label = 'Population correlation', value = 0, min = -1, max = 1, step = 0.1, width = "50%")
+numericInput(inputId = 'mu_x_careful', label = 'Population mean of X', value = 2, min = 1, max = 7, step = 0.25, width = "50%")
+numericInput(inputId = 'mu_y_careful', label = 'Population mean of Y', value = 2, min = 1, max = 7, step = 0.25, width = "50%")
 ```
 
 ```{r}
-#| panel: fill
+#| panel: center
 plotOutput('plot1')
 ```
 
@@ -240,3 +219,24 @@ output$plot1 <- renderPlot({
 width = 1250)
 
 ```
+
+**Note that if this app doesn't run properly when you click "Run document", e.g., if it opens a 404 page on the faux website, look in the console for the localhost address and open this in your browser. 
+
+
+Careless responding can substantially distort observed correlations between variables, even when careless responding is random (i.e., follows a uniform distribution and is uncorrelated between variables). 
+
+Observed correlations can be **created** from nothing when population correlation is zero and the population means diverge from the center of the scale (eg 4 on a 1-7 Likert scale) in the same direction.
+
+- e.g., population correlation = 0, mean x = 2, mean y = 2
+
+Observed correlations can be **inflated** when population correlation is non-zero and the population means diverge from the center of the scale (eg 4 on a 1-7 Likert scale) in the same direction
+
+- e.g., population correlation = 0.2, mean x = 2, mean y = 2
+
+Observed correlations can be **diluted** when population correlation is non-zero and the population means diverge from the center of the scale (eg 4 on a 1-7 Likert scale) in the opposite directions
+
+- e.g., population correlation = 0.2, mean x = 2, mean y = 6
+
+Observed correlations are also **diluted** when the mean of both X and Y variables are at the center of the scale (eg 4 on a 1-7 Likert scale), but in this case they are dilulted by the addition of the extra random noise rather than systematically biased.
+
+- e.g., mean x = 4, mean y = 4, for any value of population correlation
