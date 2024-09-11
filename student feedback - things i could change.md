@@ -1,3 +1,7 @@
+# in future years, specify that the course materials are provided under and OS licence and state that the assignments must be submitted under one too, as you are contributing towards an open body of simulations
+
+
+
 # Summary of changes to make:
 
 The early weeks should do one-at-a-time simulations rather than full factorial designs.
@@ -142,4 +146,4 @@ in an EARLY week, make them aware of full factorial vs one-at-a-time simulations
 
 
 
- 
+ add to careless responding lecture: kay 2024 Extraverted introverts, cautious risk-takers, and selfless narcissists: A demonstration of why you can’t trust data collected on MTurk
