@@ -1,0 +1,378 @@
+---
+title: "Confusing SD (standard deviation) and SE (standard error) when extracting summary statistics in meta analyses - a simulation study"
+author: "Laura Hirt & Ian Hussey"
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r dependencies and settings}
+
+# dependencies 
+library(tidyr)
+library(dplyr)
+library(forcats)
+library(readr)
+library(purrr) 
+library(ggplot2)
+library(effsize)
+library(janitor)
+library(tibble)
+library(sn)
+library(metafor)
+library(parameters)
+library(knitr)
+library(kableExtra)
+library(pwr)
+library(ggstance)
+library(scales)
+library(ggtext)
+#devtools::install_github("ianhussey/simulateR")
+library(simulateR)
+
+# set the seed for the pseudo random number generator to make results reproducible
+set.seed(47)
+
+```
+
+# Simulation flat distribution of N
+
+```{r}
+
+# # define data generating function ----
+# generate_data <- function(n_studies, mean_intervention, mean_control, sd_intervention, sd_control, n_se_sd_errors, n_participants_min = 15, n_participants_max = 50) {
+#   
+#   n_participants <- sample(seq(n_participants_min, n_participants_max, by = 1), n_studies, replace = TRUE) 
+# 
+#   # conversion to effect sizes
+#   data <- tibble(
+#     study = 1:n_studies,  
+#     m1i = rnorm(n = n_studies, mean = mean_intervention, sd = sd_intervention),
+#     m2i = rnorm(n = n_studies, mean = mean_control, sd = sd_control),
+#     sd1i = rep(sd_intervention, n_studies),
+#     sd2i = rep(sd_control, n_studies),
+#     n1i = n_participants,
+#     n2i = n_participants,
+#     se1i = sd_intervention / sqrt(n_participants),   
+#     se2i = sd_control / sqrt(n_participants)
+#   )
+#   
+#   # random selection of studies with SE instead of SD
+#   selected_studies <- sample(1:n_studies, min(n_se_sd_errors, n_studies))
+#   
+#   # extraction of SE for selected studies within a meta-analysis
+#   data <- data %>%
+#     mutate(
+#       sd1i_error = ifelse(study %in% selected_studies, se1i, sd1i),
+#       sd2i_error = ifelse(study %in% selected_studies, se2i, sd2i),
+#       se_sd_error = ifelse(study %in% selected_studies, TRUE, FALSE)
+#     )
+#   
+#   return(data)
+# }
+# 
+# 
+# # define data analysis function ----
+# analyse_data <- function(data) {
+#   
+#   # effect sizes and outcome measures without errors
+#   es_without_errors <- 
+#     escalc(measure = "SMD", 
+#            m1i = data$m1i,
+#            m2i = data$m2i,
+#            sd1i = data$sd1i,
+#            sd2i = data$sd2i,
+#            n1i = data$n1i,
+#            n2i = data$n2i) 
+#   
+#   # effect sizes and outcome measures with errors
+#   es_with_errors <- 
+#     escalc(measure = "SMD", 
+#            m1i = data$m1i,
+#            m2i = data$m2i,
+#            sd1i = data$sd1i_error,
+#            sd2i = data$sd2i_error,
+#            n1i = data$n1i,
+#            n2i = data$n2i) 
+#   
+#   # calculation of both meta-analyses; one without and the other with SE instead of SD
+#   fit_correct <- rma(yi = es_without_errors$yi, vi = es_without_errors$vi, method = "REML")
+#   fit_errors  <- rma(yi = es_with_errors$yi,    vi = es_with_errors$vi,    method = "REML")
+#   
+#   results <- tibble(es_without_errors = fit_correct$beta[,1],
+#                     es_with_errors = fit_errors$beta[,1])
+#   
+#   return(results) 
+# }
+# 
+# 
+# # define experiment parameters ----
+# experiment_parameters_grid <- expand_grid(
+#   n_studies = 12,
+#   mean_intervention = c(0, .2, .5, .8),
+#   mean_control = 0,
+#   sd_control = 1,
+#   sd_intervention = 1,
+#   n_se_sd_errors = seq(from = 1, to = 8, by = 1),
+#   iteration = 1:1000
+# )
+# 
+# 
+# # run simulation ----
+# simulation <- experiment_parameters_grid |>
+#   mutate(generated_data = pmap(list(n_studies,
+#                                     mean_intervention,
+#                                     mean_control,
+#                                     sd_intervention,
+#                                     sd_control,
+#                                     n_se_sd_errors),
+#                                generate_data)) |>
+#   mutate(analysis_results = pmap(list(generated_data),
+#                                  analyse_data))
+# 
+# 
+# # simulation results table ----
+# results <- 
+#   left_join(
+#     simulation |>
+#       unnest(generated_data) |>
+#       group_by(n_studies,
+#                mean_intervention,
+#                mean_control,
+#                sd_control,
+#                sd_intervention,
+#                n_se_sd_errors,
+#                iteration) |>
+#   summarize(total_n = sum(n1i) + sum(n2i),
+#             percent_se_sd_errors = mean(se_sd_error)),
+#     simulation |>
+#       unnest(analysis_results) |>
+#       mutate(es_population = mean_intervention,
+#              deviation = es_with_errors - es_without_errors,
+#              prop_deviation = es_with_errors / es_without_errors,
+#              deviation_without_errors = es_without_errors - es_population,
+#              deviation_with_errors = es_with_errors - es_population) |>
+#       select(-generated_data)
+#   )
+# 
+# # table with only relevant variables --------
+# results_summary <- results |>
+#   group_by(n_studies,
+#            es_population,
+#            n_se_sd_errors) |>
+#   summarize(mean_es_with_errors = mean(es_with_errors),
+#             mean_es_without_errors = mean(es_without_errors),
+#             mean_deviation = mean(deviation),
+#             mean_prop_deviation = mean(prop_deviation),
+#             mean_deviation_without_errors = mean(deviation_without_errors),
+#             mean_deviation_with_errors = mean(deviation_with_errors)) |>
+#   ungroup()
+# 
+# results_summary |>
+#   mutate_if(is.numeric, round_half_up, digits = 2) |>
+#   kable() |>
+#   kable_classic(full_width = FALSE)
+
+```
+
+# Simulation static N
+
+```{r}
+
+# define data generating function ----
+generate_data <- function(n_studies, n_participants_per_group, mean_intervention, mean_control, sd_intervention, sd_control, n_se_sd_errors) {
+
+  # conversion to effect sizes
+  data <- tibble(
+    study = 1:n_studies,
+    m1i = rnorm(n = n_studies, mean = mean_intervention, sd = sd_intervention),
+    m2i = rnorm(n = n_studies, mean = mean_control, sd = sd_control),
+    sd1i = rep(sd_intervention, n_studies),
+    sd2i = rep(sd_control, n_studies),
+    n1i = n_participants_per_group,
+    n2i = n_participants_per_group,
+    se1i = sd_intervention / sqrt(n_participants_per_group),
+    se2i = sd_control / sqrt(n_participants_per_group)
+  )
+
+  # random selection of studies with SE instead of SD
+  selected_studies <- sample(1:n_studies, min(n_se_sd_errors, n_studies))
+
+  # extraction of SE for selected studies within a meta-analysis
+  data <- data %>%
+    mutate(
+      sd1i_error = ifelse(study %in% selected_studies, se1i, sd1i),
+      sd2i_error = ifelse(study %in% selected_studies, se2i, sd2i),
+      se_sd_error = ifelse(study %in% selected_studies, TRUE, FALSE)
+    )
+
+  return(data)
+}
+
+
+# define data analysis function ----
+analyse_data <- function(data) {
+  
+  # effect sizes and outcome measures without errors
+  es_without_errors <- 
+    escalc(measure = "SMD", 
+           m1i = data$m1i,
+           m2i = data$m2i,
+           sd1i = data$sd1i,
+           sd2i = data$sd2i,
+           n1i = data$n1i,
+           n2i = data$n2i) 
+  
+  # effect sizes and outcome measures with errors
+  es_with_errors <- 
+    escalc(measure = "SMD", 
+           m1i = data$m1i,
+           m2i = data$m2i,
+           sd1i = data$sd1i_error,
+           sd2i = data$sd2i_error,
+           n1i = data$n1i,
+           n2i = data$n2i) 
+  
+  # calculation of both meta-analyses; one without and the other with SE instead of SD
+  fit_correct <- rma(yi = es_without_errors$yi, vi = es_without_errors$vi, method = "REML")
+  fit_errors  <- rma(yi = es_with_errors$yi,    vi = es_with_errors$vi,    method = "REML")
+  
+  results <- tibble(es_without_errors = fit_correct$beta[,1],
+                    es_with_errors = fit_errors$beta[,1])
+  
+  return(results) 
+}
+
+
+# define experiment parameters ----
+experiment_parameters_grid <- expand_grid(
+  n_studies = c(10, 15, 20),
+  n_participants_per_group = c(10, 25, 50),
+  mean_intervention = c(0, .2, .5, .8),
+  mean_control = 0,
+  sd_control = 1,
+  sd_intervention = 1,
+  n_se_sd_errors = seq(from = 1, to = 8, by = 1),
+  iteration = 1:100
+)
+
+# experiment_parameters_grid <- expand_grid(
+#   n_studies = c(10, 15),
+#   n_participants_per_group = c(10, 25),
+#   mean_intervention = .4,
+#   mean_control = 0,
+#   sd_control = 1,
+#   sd_intervention = 1,
+#   n_se_sd_errors = seq(from = 1, to = 5, by = 1),
+#   iteration = 1:100
+# )
+
+
+# run simulation ----
+simulation <- experiment_parameters_grid |>
+  mutate(generated_data = pmap(list(n_studies,
+                                    n_participants_per_group,
+                                    mean_intervention,
+                                    mean_control,
+                                    sd_intervention,
+                                    sd_control,
+                                    n_se_sd_errors),
+                               generate_data)) |>
+  mutate(analysis_results = pmap(list(generated_data),
+                                 analyse_data))
+
+
+# simulation results table ----
+results <- 
+  left_join(
+    simulation |>
+      unnest(generated_data) |>
+      group_by(n_studies,
+               n_participants_per_group,
+               mean_intervention,
+               mean_control,
+               sd_control,
+               sd_intervention,
+               n_se_sd_errors,
+               iteration) |>
+      summarize(percent_se_sd_errors = mean(se_sd_error)),
+    simulation |>
+      unnest(analysis_results) |>
+      mutate(es_population = mean_intervention,
+             deviation = es_with_errors - es_without_errors,
+             prop_deviation = es_with_errors / es_without_errors,
+             deviation_without_errors = es_without_errors - es_population,
+             deviation_with_errors = es_with_errors - es_population) |>
+      select(-generated_data)
+  )
+
+# table with only relevant variables --------
+results_summary <- results |>
+  group_by(n_studies,
+           n_participants_per_group,
+           es_population,
+           n_se_sd_errors) |>
+  summarize(mean_es_with_errors = mean(es_with_errors),
+            mean_es_without_errors = mean(es_without_errors),
+            mean_deviation = mean(deviation),
+            mean_prop_deviation = mean(prop_deviation),
+            mean_deviation_without_errors = mean(deviation_without_errors),
+            mean_deviation_with_errors = mean(deviation_with_errors)) |>
+  ungroup()
+
+results_summary |>
+  mutate_if(is.numeric, round_half_up, digits = 2) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+# Multiverse plot 
+
+```{r fig.height=6, fig.width=8}
+
+results_summary |>
+  mutate(outcome = mean_es_without_errors) |>
+  arrange(es_population, n_se_sd_errors, n_studies, n_participants_per_group) |>
+  mutate(rank = row_number()) |>
+  dplyr::select(`Studies` = n_studies, 
+                `Participants` = n_participants_per_group, 
+                `Errors` = n_se_sd_errors, 
+                `Population ES` = es_population, 
+                outcome,
+                rank) |>
+  multiverse_plot(outcome_name = "Mean Sample ES",
+                  outcome_cutoff = 0)
+
+```
+
+```{r fig.height=6, fig.width=8}
+
+results_summary |>
+  mutate(outcome = mean_deviation) |>
+  arrange(es_population, n_se_sd_errors, n_studies, n_participants_per_group) |>
+  mutate(rank = row_number()) |>
+  dplyr::select(`Studies` = n_studies, 
+                `Participants` = n_participants_per_group, 
+                `Errors` = n_se_sd_errors, 
+                `Population ES` = es_population, 
+                outcome,
+                rank) |>
+  multiverse_plot(outcome_name = "diff sample w vs wo errors",
+                  outcome_cutoff = 0)
+
+```
+
+# Session info
+
+```{r}
+sessionInfo()
+```
