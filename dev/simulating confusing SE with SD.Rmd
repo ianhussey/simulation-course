@@ -10,6 +10,12 @@ output:
     toc_float: yes
 ---
 
+# Literature
+
+- Understanding the difference between SE and SD: https://www.bmj.com/content/331/7521/903.full.pdf+html
+- The prevalence of conceptual misunderstandings: https://www.pnas.org/doi/10.1073/pnas.2302491120
+- The prevalence of SE/SD errors in meta analyses: Maassen et al. (REF); https://academic.oup.com/bja/article/90/4/514/274340; others
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
