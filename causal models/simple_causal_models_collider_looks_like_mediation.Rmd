@@ -1,0 +1,134 @@
+
+
+# simple demo of collider
+
+```{r}
+
+library(lavaan)
+library(semPlot)
+library(tidyverse)
+
+analyse <- function(model, data){
+  # fit regressions. NB model must include a Y ~ X term.
+  fit <- sem(model = model, data = data) 
+  
+  # extract beta estimate for Y~X
+  beta <- parameterEstimates(fit) |>
+    mutate(effect = paste(lhs, rhs, sep = "~")) |>
+    filter(effect == "Y~X") |>
+    dplyr::select(y_x_beta = est)
+  
+  fit_measures <- data.frame(estimate = fitmeasures(fit, fit.measures = c("rmsea", "tli", "cfi", "srmr"))) |>
+    rownames_to_column(var = "fit_metric") |>
+    pivot_wider(names_from = fit_metric, 
+                values_from = estimate)
+  
+  return(bind_cols(beta, fit_measures))
+}
+
+```
+
+# Collider analyzed as if its multiple regression
+
+true Y~X is zero, but analysis shows a non-zero Y~X effect!
+
+despite fitting a totally different analytic model to the data generating process, we find good fit!
+
+```{r}
+
+# data generating process
+mod <- "M ~ 0.5*X + 0.5*Y; Y ~ 0.0*X"
+
+# simulate data
+dat <- lavaan::simulateData(model = mod, sample.nobs = 10000)
+
+# plot model configuration
+layout_matrix <- matrix(c( 0,  1,
+                           1,  0,
+                          -1,  0), 
+                        ncol = 2, 
+                        byrow = TRUE)
+
+dat %>%
+  sem(model = mod, data = .) |>
+  semPaths(whatLabels = "diagram", 
+           layout = layout_matrix, 
+           residuals = FALSE,
+           edge.label.cex = 1.2, 
+           sizeMan = 10)
+title(main = "Collider", adj = 0)
+
+# analyze using a multiple regression model
+analyse(model = "Y ~ X + M", data = dat)
+
+```
+
+# Collider analyzed as if its multiple regression (ii)
+
+true Y~X is positive (0.5), but analysis shows an attenuated Y~X effect!
+
+despite fitting a totally different analytic model to the data generating process, we find good fit!
+
+```{r}
+
+# data generating process
+mod <- "M ~ 0.5*X + 0.5*Y; Y ~ 0.5*X"
+
+# simulate data
+dat <- lavaan::simulateData(model = mod, sample.nobs = 10000)
+
+# plot configural model
+layout_matrix <- matrix(c( 0,  1,
+                           1,  0,
+                          -1,  0), 
+                        ncol = 2, 
+                        byrow = TRUE)
+
+dat %>%
+  sem(model = mod, data = .) |>
+  semPaths(whatLabels = "diagram", 
+           layout = layout_matrix, 
+           residuals = FALSE,
+           edge.label.cex = 1.2, 
+           sizeMan = 10)
+title(main = "Collider", adj = 0)
+
+# analyze using a multiple regression model
+analyse(model = "Y ~ X + M", data = dat)
+
+```
+
+# Collider analyzed as if its mediation
+
+when true Y~X is positive (o.5), results can 'support' partial mediation! ie a positive direct effect reduces when you control for the mediator
+
+```{r}
+
+# data generating process
+mod <- "M ~ 0.5*X + 0.5*Y; Y ~ 0.5*X"
+
+# simulate data
+dat <- lavaan::simulateData(model = mod, sample.nobs = 10000)
+
+dat %>%
+  sem(model = mod, data = .) |>
+  semPaths(whatLabels = "diagram", 
+           layout = layout_matrix, 
+           residuals = FALSE,
+           edge.label.cex = 1.2, 
+           sizeMan = 10)
+title(main = "Collider", adj = 0)
+
+# direct effect `c`
+analyse(model = "Y ~ X", data = dat)
+# direct effect `c'` after controlling for mediator
+analyse(model = "Y ~ X + M; M ~ X", data = dat)
+
+```
+
+- bring up Baron & Kenny's article, how often its cited, and the influence it has on the literature in the last few decades
+- bring up how this method seems to align with the goals of psychology wanting to know about mental processes.
+- the point is that "mediation tests" do not test mediation, they assume mediation.
+
+
+
