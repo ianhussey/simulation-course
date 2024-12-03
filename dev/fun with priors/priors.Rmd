@@ -1,0 +1,349 @@
+---
+title: "Fun with priors"
+author: "Ian Hussey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(message = FALSE, 
+                      warning = FALSE)
+
+```
+
+```{r}
+
+# create dir
+dir.create("models")
+
+# dependencies
+library(tibble)
+library(dplyr)
+library(tidyr)
+library(janitor)
+library(ggplot2)
+library(brms)
+library(parameters)
+library(ggstance)
+
+```
+
+# Generate data
+
+## Under the alternative model 
+
+Population $B$ = 0.50
+
+```{r fig.height=5, fig.width=5}
+
+set.seed(815162342)
+
+n <- 1000
+x <- rnorm(n = n, mean = 0, sd = 1)
+
+# adjust the error term to ensure the variance of y is 1
+beta_x <- 0.50
+error_sd <- sqrt(1 - beta_x^2)  # adjusted to maintain total variance of 1
+
+y <- beta_x*x + rnorm(n = n, mean = 0, sd = error_sd)
+
+dat_alternative <- tibble(x = x,
+                          y = y)
+
+ggplot(dat_alternative, aes(x)) +
+  geom_density()
+
+ggplot(dat_alternative, aes(y)) +
+  geom_density()
+
+ggplot(dat_alternative, aes(x, y)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+dat_alternative |>
+  summarize(y_mean = mean(y),
+            y_sd = sd(y),
+            x_mean = mean(x),
+            x_sd = sd(x))
+
+lm(y ~ x, data = dat_alternative) |>
+  summary()
+
+```
+
+## Under the null model 
+
+Population $B$ = 0.00
+
+```{r fig.height=5, fig.width=5}
+
+set.seed(815162342)
+
+n <- 1000
+x <- rnorm(n = n, mean = 0, sd = 1)
+
+# adjust the error term to ensure the variance of y is 1
+beta_x <- 0.00
+error_sd <- sqrt(1 - beta_x^2)  # adjusted to maintain total variance of 1
+
+y <- beta_x*x + rnorm(n = n, mean = 0, sd = error_sd)
+
+dat_null <- tibble(x = x,
+                          y = y)
+
+ggplot(dat_null, aes(x)) +
+  geom_density()
+
+ggplot(dat_null, aes(y)) +
+  geom_density()
+
+ggplot(dat_null, aes(x, y)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+dat_null |>
+  summarize(y_mean = mean(y),
+            y_sd = sd(y),
+            x_mean = mean(x),
+            x_sd = sd(x))
+
+lm(y ~ x, data = dat_null) |>
+  summary()
+
+```
+
+# Analyze data
+
+## Informative alternative prior
+
+### Alternative effect
+
+```{r}
+
+priors_inform_alt <- c(
+  prior(normal(0.50, 0.02), class = "b"), # prior for the slope
+  prior(normal(0, 10), class = "Intercept"), # prior for the intercept
+  prior(exponential(1), class = "sigma") # prior for residual standard deviation
+)
+
+res_alt_inform_alt <- 
+  brm(formula = y ~ x, 
+      prior = priors_inform_alt,
+      data = dat_alternative,
+      iter = 2000, 
+      chains = 4,
+      save_model = "models/res_alt_inform_alt.rds")
+
+summary(res_alt_inform_alt)
+
+```
+
+### Null effect
+
+```{r}
+
+res_null_inform_alt <- 
+  brm(formula = y ~ x, 
+      prior = priors_inform_alt,
+      data = dat_null,
+      iter = 2000, 
+      chains = 4,
+      save_model = "models/res_null_inform_alt.rds")
+
+summary(res_null_inform_alt)
+
+```
+
+## Informative null prior
+
+### Alternative effect 
+
+```{r}
+
+priors_inform_null <- c(
+  prior(normal(0.00, 0.02), class = "b"), # prior for the slope
+  prior(normal(0, 10), class = "Intercept"), # prior for the intercept
+  prior(exponential(1), class = "sigma") # prior for residual standard deviation
+)
+
+res_alt_inform_null <- 
+  brm(formula = y ~ x, 
+      prior = priors_inform_null,
+      data = dat_alternative,
+      iter = 2000, 
+      chains = 4,
+      save_model = "models/res_alt_inform_null.rds")
+
+summary(res_alt_inform_null)
+
+```
+
+### Null effect
+
+```{r}
+
+res_null_inform_null <- 
+  brm(formula = y ~ x, 
+      prior = priors_inform_null,
+      data = dat_null,
+      iter = 2000, 
+      chains = 4,
+      save_model = "models/res_null_inform_null.rds")
+
+summary(res_null_inform_null)
+
+```
+
+## Weakly regularizing alternative prior
+
+### Alternative effect 
+
+```{r}
+
+priors_reg_alt <- c(
+  prior(normal(0.50, 2.00), class = "b"), # prior for the slope
+  prior(normal(0, 10), class = "Intercept"), # prior for the intercept
+  prior(exponential(1), class = "sigma") # prior for residual standard deviation
+)
+
+res_alt_reg_alt <- 
+  brm(formula = y ~ x, 
+      prior = priors_reg_alt,
+      data = dat_alternative,
+      iter = 2000, 
+      chains = 4,
+      save_model = "models/res_alt_reg_alt.rds")
+
+summary(res_alt_reg_alt)
+
+```
+
+### Null effect
+
+```{r}
+
+res_null_reg_alt <- 
+  brm(formula = y ~ x, 
+      prior = priors_reg_alt,
+      data = dat_null,
+      iter = 2000, 
+      chains = 4,
+      save_model = "models/res_null_reg_alt.rds")
+
+summary(res_null_reg_alt)
+
+```
+
+## Weakly regularizing null prior
+
+### Alternative effect 
+
+```{r}
+
+priors_reg_null <- c(
+  prior(normal(0.00, 2.00), class = "b"), # prior for the slope
+  prior(normal(0, 10), class = "Intercept"), # prior for the intercept
+  prior(exponential(1), class = "sigma") # prior for residual standard deviation
+)
+
+res_alt_reg_null <- 
+  brm(formula = y ~ x, 
+      prior = priors_reg_null,
+      data = dat_alternative,
+      iter = 2000, 
+      chains = 4,
+      save_model = "models/res_alt_reg_null.rds")
+
+summary(res_alt_reg_null)
+
+```
+
+### Null effect
+
+```{r}
+
+res_null_reg_null <- 
+  brm(formula = y ~ x, 
+      prior = priors_reg_null,
+      data = dat_null,
+      iter = 2000, 
+      chains = 4,
+      save_model = "models/res_null_reg_null.rds")
+
+summary(res_null_reg_null)
+
+```
+
+## Summarize results
+
+```{r fig.height=4, fig.width=9}
+
+res <- bind_rows(
+  parameters(res_alt_inform_alt) |>
+    mutate(population_effect = "alternative", 
+           prior_strength = "informative", 
+           prior_location = "alternative"),
+  
+  parameters(res_null_inform_alt) |>
+    mutate(population_effect = "null", 
+           prior_strength = "informative", 
+           prior_location = "alternative"),
+  
+  parameters(res_alt_inform_null) |>
+    mutate(population_effect = "alternative", 
+           prior_strength = "informative", 
+           prior_location = "null"),
+  
+  parameters(res_null_inform_null) |>
+    mutate(population_effect = "null", 
+           prior_strength = "informative", 
+           prior_location = "null"),
+  
+  parameters(res_alt_reg_alt) |>
+    mutate(population_effect = "alternative", 
+           prior_strength = "weakly regularizing", 
+           prior_location = "alternative"),
+  
+  parameters(res_null_reg_alt) |>
+    mutate(population_effect = "null", 
+           prior_strength = "weakly regularizing", 
+           prior_location = "alternative"),
+  
+  parameters(res_alt_reg_null) |>
+    mutate(population_effect = "alternative", 
+           prior_strength = "weakly regularizing", 
+           prior_location = "null"),
+  
+  parameters(res_null_reg_null) |>
+    mutate(population_effect = "null", 
+           prior_strength = "weakly regularizing", 
+           prior_location = "null"),
+) |>
+  filter(Parameter == "b_x") |>
+  select(population_effect, prior_strength, prior_location, beta_x = Median, beta_x_ci_lower = CI_low, beta_x_ci_upper = CI_high) |>
+  mutate(label = paste0("prior strength: ", prior_strength, "\nprior location: ", prior_location),
+         ci_width = beta_x_ci_upper - beta_x_ci_lower)
+
+ggplot(res, aes(x = beta_x, y = label, color = population_effect)) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  geom_linerangeh(aes(xmin = beta_x_ci_lower, xmax = beta_x_ci_upper),
+                  position = position_dodge(width = 0.2)) +
+  geom_point(position = position_dodge(width = 0.2)) +
+  scale_x_continuous(breaks = scales::breaks_pretty(n = 5)) +
+  theme_linedraw() +
+  scale_color_viridis_d(begin = 0.3, end = 0.7) +
+  ylab("") +
+  xlab("Beta estimate")
+
+ggsave(filename = "priors_plot.png", width = 9, height = 5)
+
+```
+
+
