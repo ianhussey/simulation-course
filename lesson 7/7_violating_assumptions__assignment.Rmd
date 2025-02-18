@@ -1,0 +1,170 @@
+---
+title: "Assessing the impact of violating the assumption of normality [assignment]"
+subtitle: "Within a Welches' independent *t*-test"
+author: "Ian Hussey (template) & [student's name]"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+# Check your learning
+
+Distributions:
+
+- The normal distribution is defined as two parameters, what are they?
+- The skew-normal distribution is defined as three parameters, what are they? 
+- Which parameters of the normal distribution broadly correspond with which parameters of the skew-normal distribution? 
+- When is a skew-normal distribution identical to a normal distribution? 
+
+(Violating the) assumptions of statistical inference tests:
+
+- We all know that violating assumptions is bad. Bad for what? What property or properties of the test is the one we are usually concerned with being undermined when assumptions are violated?
+
+# Apply your learning
+
+The code in the below chunk adapted from "4_assumptions__lesson.Rmd". Modify the code appropriately to create a simulation that answers the question **under what conditions does non-normality affect the results of the Welches' *t*-test?** 
+
+Where non-normality is defined as:
+
+- Data in the control condition that is either strongly left-skewed or strongly right-skewed (skew = -12 or +12).
+- Data in the intervention condition that is either strongly left-skewed or strongly right-skewed (skew = -12 or +12).
+  - NB You should summarize across conditions by whether the data either has a same vs. different non-normal distribution, so control-left-skewed and intervention-right-skewed and control-right-skewed and intervention-left-skewed are effectively the same, etc.
+
+Where analysis outcomes of interest are:
+
+- The false-positive rate of *p* values.
+  - NB false-positive rate only, not false-negative rate. So the population locations should be the same in both the control and intervention conditions.
+- Estimates of Cohen's *d* (standardized effect sizes)
+  - NB this will require you to modify the analysis function.
+
+```{r}
+
+# dependencies
+library(tidyr)
+library(dplyr)
+library(purrr) 
+library(ggplot2)
+library(sn)
+
+# simple plot of a normal distribution
+set.seed(42)
+
+```
+
+# The impact of non-normality on effect sizes and inferences from *p* values
+
+```{r}
+
+# define data generating function ----
+generate_data <- function(n_control,
+                          n_intervention,
+                          location_control, # location, akin to mean
+                          location_intervention,
+                          scale_control, # scale, akin to SD
+                          scale_intervention,
+                          skew_control, # slant/skew. When 0, produces normal/gaussian data
+                          skew_intervention) {
+  
+  data_control <- 
+    tibble(condition = "control",
+           score = rsn(n = n_control, 
+                       xi = location_control, # location, akin to mean
+                       omega = scale_control, # scale, akin to SD
+                       alpha = skew_control)) # slant/skew. When 0, produces normal/gaussian data
+  
+  data_intervention <- 
+    tibble(condition = "intervention",
+           score = rsn(n = n_intervention, 
+                       xi = location_intervention, # location, akin to mean
+                       omega = scale_intervention, # scale, akin to SD
+                       alpha = skew_intervention)) # slant/skew. When 0, produces normal/gaussian data
+  
+  data <- bind_rows(data_control,
+                    data_intervention) 
+  
+  return(data)
+}
+
+# define data analysis function ----
+analyse_data <- function(data) {
+  res_t_test <- t.test(formula = score ~ condition, 
+                       data = data,
+                       var.equal = TRUE,
+                       alternative = "two.sided")
+  
+  # \TODO this function will need to be changed to extract cohen's d instead. While there is code for this in a previous lesson, see if you can rewrite it yourself.
+  res <- tibble(p = res_t_test$p.value,
+                mean_control = res_t_test$estimate[1],  
+                mean_intervention = res_t_test$estimate[2])
+  
+  return(res)
+}
+
+# set the seed ----
+# for the pseudo random number generator to make results reproducible
+set.seed(42)
+
+# define experiment parameters ----
+experiment_parameters_grid_c <- expand_grid(
+  
+  # \TODO - see if you can construct this without copy-pasting it from the lesson file
+  
+)
+
+# run simulation ----
+simulation_c <- 
+  # using the experiment parameters
+  experiment_parameters_grid_c |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n_control,
+                                    n_intervention,
+                                    location_control,
+                                    location_intervention,
+                                    scale_control,
+                                    scale_intervention,
+                                    skew_control,
+                                    skew_intervention),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results = pmap(list(generated_data),
+                                 analyse_data))
+  
+
+# summarise simulation results over the iterations ----
+simulation_c_summary <- simulation_c |>
+  unnest(analysis_results) |>
+  
+  # # \TODO - the summary across conditions must be group_by()'d the conditions that were manipulated, ie where there is more than one value for the parameter in expand_grid()
+  # group_by() |> 
+  
+  summarize(
+    
+    # \TODO - this code to summarize the outcomes will need to be adapted 
+    
+  ) 
+
+# print results table
+simulation_c_summary |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+``` 
+
+- Please write a summary of your findings below. I.e., under what conditions does non-normality affect the results of the Welches' *t*-test?
+
+# Session info
+
+```{r}
+
+sessionInfo()
+
+```
+
+

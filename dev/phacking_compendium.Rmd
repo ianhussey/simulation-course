@@ -1,6 +1,0 @@
-
-add to stefan and schonbrodt:
-
-- combining conditions
-- creating new measures by combining measures
-- splitting measures in two and adding interactions

@@ -1,3 +1,0 @@
-Delacre, Lakens, & Leys(2017) "Why Psychologists Should by Default Use Welch’s t-test Instead of Student’s t-test" DOI: https://doi.org/10.5334/irsp.82
-
-Delacre, Lakens, & Leys(2022) "Correction: Why Psychologists Should by Default Use Welch’s t-test Instead of Student’s t-test" DOI: https://doi.org/10.5334/irsp.661

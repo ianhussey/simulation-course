@@ -11,4 +11,8 @@ Researchers who are already familiar with writing simulations whose simulations 
 
 ## Licence
 
-All materials are public domain under a CC-0 1.0 licence. You may therefore use or modify these materials however you like.
+All materials are public domain under a CC BY 4.0 licence. You may therefore use or modify these materials however you like with attribution.
+
+## Citation
+
+Hussey (2024) Improving your statistical inferences through simulation studies in R. https://github.com/ianhussey/simulation-course. 

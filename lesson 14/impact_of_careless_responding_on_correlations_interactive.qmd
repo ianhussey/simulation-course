@@ -1,0 +1,242 @@
+---
+title: "The impact of careless responding on correlations"
+author: "Ian Hussey"
+format: 
+  html:
+    page-layout: custom
+server: shiny
+---
+
+```{r}
+#| panel: sidebar
+numericInput(inputId = 'n', label = 'Total sample size', value = 800, min = 40, max = 10000, step = 50, width = "50%")
+numericInput(inputId = 'prob_careless', label = 'Proportion of careless responders', value = 0.15, min = 0, max = .99, step = 0.05, width = "50%")
+numericInput(inputId = 'rho_careful', label = 'Population correlation', value = 0, min = -1, max = 1, step = 0.1, width = "50%")
+numericInput(inputId = 'mu_x_careful', label = 'Population mean of X', value = 2, min = 1, max = 7, step = 0.25, width = "50%")
+numericInput(inputId = 'mu_y_careful', label = 'Population mean of Y', value = 2, min = 1, max = 7, step = 0.25, width = "50%")
+```
+
+```{r}
+#| panel: center
+plotOutput('plot1')
+```
+
+```{r}
+#| context: server
+
+library(tidyr)
+library(dplyr)
+library(tibble)
+library(forcats)
+library(purrr) 
+library(ggplot2)
+library(janitor)
+library(faux)
+library(ggtext)
+
+
+generate_data <- function(n,
+                          prob_careless,
+                          rho_careful,
+                          mu_x_careful,
+                          mu_y_careful) { 
+  
+  n_careless <- floor(n * prob_careless)
+  n_careful <- n - n_careless
+  
+  data_careful <- 
+    faux::rnorm_multi(n = n_careful, 
+                      mu = c(y = 1, x = 1), 
+                      sd = c(1, 1), 
+                      r = matrix(c(1, rho_careful, 
+                                   rho_careful, 1), 
+                                 ncol = 2)) |>
+    mutate(type = "careful") |>
+    # convert to likert
+    mutate(x = faux::norm2trunc(x, min = 1, max = 7, mu = mu_x_careful, sd = 1),
+           y = faux::norm2trunc(y, min = 1, max = 7, mu = mu_y_careful, sd = 1))
+  
+  data_careless <-
+    data.frame(x = runif(n = n_careless, min = 1, max = 7),
+               y = runif(n = n_careless, min = 1, max = 7)) |>
+    mutate(type = "careless") 
+  
+  data <- bind_rows(data_careful,
+                    data_careless) |>
+    rownames_to_column(var = "id")
+  
+  return(data)
+}
+
+# define data analysis function ----
+analyse_data <- function(data) {
+  
+  fit_all <- cor.test(data$y,
+                      data$x, 
+                      method = "pearson")
+  
+  dat_careful <- data |>
+    filter(type == "careful")
+  
+  fit_careful <- cor.test(dat_careful$y,
+                          dat_careful$x, 
+                          method = "pearson")
+  
+  dat_careless <- data |>
+    filter(type == "careless")
+  
+  fit_careless <- cor.test(dat_careless$y,
+                           dat_careless$x, 
+                           method = "pearson")
+  
+  results <- tibble(r_all = fit_all$estimate,
+                    p_all = fit_all$p.value,
+                    r_careful = fit_careful$estimate,
+                    p_careful = fit_careful$p.value,
+                    r_careless = fit_careless$estimate,
+                    p_careless = fit_careless$p.value,
+                    meanx_careful = mean(dat_careful$x),
+                    meany_careful = mean(dat_careful$y))
+  
+  return(results)
+}
+
+# Define the round_p_apa function
+round_p_apa <- function(p) {
+  # Vectorized conditional check
+  # Format p-values to APA style, removing leading zero for values > 0.001 and keeping trailing zeros
+  formatted_p = ifelse(p < .001, 
+                       "< .001", 
+                       sub("^0", "", formatC(p, format = "f", digits = 3)))
+
+  # Add the '=' sign to formatted p-values greater than or equal to .001
+  ifelse(p >= .001, paste0("= ", formatted_p), formatted_p)
+}
+
+round_with_zeros <- function(x, digits = 2) {
+  # Use sprintf to format the number
+  # %f for floating point, with variable precision specified by 'digits'
+  sprintf(paste0("%.", digits, "f"), round(x, digits))
+}
+
+generate_and_analyse_data <- reactive({
+  
+  # define experiment parameters ----
+  experiment_parameters_grid <- expand_grid(
+    n = input$n, 
+    prob_careless = input$prob_careless,
+    rho_careful = input$rho_careful, 
+    mu_x_careful = input$mu_x_careful, 
+    mu_y_careful = input$mu_y_careful  
+  )
+  
+  # run simulation ----
+  simulation <- 
+    # using the experiment parameters
+    experiment_parameters_grid |>
+    
+    # generate data using the data generating function and the parameters relevant to data generation
+    mutate(generated_data = pmap(list(n,
+                                      prob_careless,
+                                      rho_careful,
+                                      mu_x_careful,
+                                      mu_y_careful),
+                                 generate_data)) |>
+    
+    # apply the analysis function to the generated data using the parameters relevant to analysis
+    mutate(analysis_results = pmap(list(generated_data),
+                                   analyse_data))
+  
+  
+  plucked_iteration <- 1
+  
+  data <- 
+    bind_rows(simulation$generated_data[[plucked_iteration]] |>
+                mutate(type = case_when(type == "careful" ~ "True effect\n(careful responding)",
+                                        type == "careless" ~ "Noise\n(careless responding)")),
+              simulation$generated_data[[plucked_iteration]] |>
+                mutate(type = "Observed effect\n(careful + careless)")) |>
+    mutate(type = fct_relevel(type, "True effect\n(careful responding)", "Noise\n(careless responding)", "Observed effect\n(careful + careless)"))
+  
+  results <- simulation$analysis_results[[plucked_iteration]] |>
+    pivot_longer(cols = everything(),
+                 names_to = c("metric", "type"),
+                 values_to = "values",
+                 names_sep = "_") |>
+    pivot_wider(names_from = "metric",
+                values_from = "values") |>
+    mutate(r = round_with_zeros(r, digits = 2),
+           p = round_p_apa(p)) |>
+    mutate(type = case_when(type == "careful" ~ "True effect\n(careful responding)",
+                            type == "careless" ~ "Noise\n(careless responding)",
+                            type == "all" ~ "Observed effect\n(careful + careless)"),
+           type = fct_relevel(type, "True effect\n(careful responding)", "Noise\n(careless responding)", "Observed effect\n(careful + careless)"))
+  
+  return(list(data = data,
+              results = results))
+})
+
+output$plot1 <- renderPlot({
+  
+  res <- generate_and_analyse_data()
+  
+  base_size <- 14
+  
+  ggplot(res$data, aes(x, y)) +
+    geom_hline(yintercept = 4, linetype = "dotted", size = 1) +
+    geom_vline(xintercept = 4, linetype = "dotted", size = 1) +
+    geom_hline(data = res$results |> drop_na(), 
+               aes(yintercept = meany), linetype = "solid", color = "purple", size = 1) +
+    geom_vline(data = res$results |> drop_na(), 
+               aes(xintercept = meanx), linetype = "solid", color = "purple", size = 1) +
+    # geom_line(data = res$results |> drop_na() |> mutate(xmiddle = 4, ymiddle = 4), 
+    #           aes(x ))
+    geom_point(alpha = 0.4, color = "grey50") +
+    geom_smooth(method = "lm", color = "chartreuse4") +
+    scale_color_viridis_d(begin = 0.4, end = 0.6) +
+    geom_richtext(data = res$results, 
+                  aes(x = 1.25, y = 6.5, label = paste("<i>r</i> =", r, ", <i>p</i>", p)), 
+                  hjust = 0, 
+                  vjust = 0.5, 
+                  size = 8, 
+                  color = "chartreuse4") +
+    scale_y_continuous(breaks = c(1,2,3,4,5,6,7)) +
+    scale_x_continuous(breaks = c(1,2,3,4,5,6,7)) +
+    coord_cartesian(xlim = c(1, 7), ylim = c(1, 7)) +
+    xlab("Variable X") +
+    ylab("Variable Y") +
+    facet_wrap(~ type) +
+    theme_linedraw() +
+    theme(legend.position = "inside", 
+          legend.position.inside = c(.9, .15),
+          panel.spacing = unit(1.5, "lines"),
+          axis.title = element_text(size = base_size * 1.2, face = "bold"),
+          axis.text = element_text(size = base_size),
+          strip.text = element_text(size = base_size * 1.2, face = "bold"),
+          plot.title = element_text(size = base_size * 1.5, face = "bold", hjust = 0.5),
+          aspect.ratio = 1)
+},
+width = 1250)
+
+```
+
+**Note that if this app doesn't run properly when you click "Run document", e.g., if it opens a 404 page on the faux website, look in the console for the localhost address and open this in your browser. 
+
+
+Careless responding can substantially distort observed correlations between variables, even when careless responding is random (i.e., follows a uniform distribution and is uncorrelated between variables). 
+
+Observed correlations can be **created** from nothing when population correlation is zero and the population means diverge from the center of the scale (eg 4 on a 1-7 Likert scale) in the same direction.
+
+- e.g., population correlation = 0, mean x = 2, mean y = 2
+
+Observed correlations can be **inflated** when population correlation is non-zero and the population means diverge from the center of the scale (eg 4 on a 1-7 Likert scale) in the same direction
+
+- e.g., population correlation = 0.2, mean x = 2, mean y = 2
+
+Observed correlations can be **diluted** when population correlation is non-zero and the population means diverge from the center of the scale (eg 4 on a 1-7 Likert scale) in the opposite directions
+
+- e.g., population correlation = 0.2, mean x = 2, mean y = 6
+
+Observed correlations are also **diluted** when the mean of both X and Y variables are at the center of the scale (eg 4 on a 1-7 Likert scale), but in this case they are dilulted by the addition of the extra random noise rather than systematically biased.
+
+- e.g., mean x = 4, mean y = 4, for any value of population correlation

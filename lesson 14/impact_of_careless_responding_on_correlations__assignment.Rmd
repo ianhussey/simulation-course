@@ -1,0 +1,282 @@
+---
+title: "The impact of careless responding on correlations"
+author: "Ian Hussey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+```
+
+# Overview
+
+[Stosic et al. (2024)](https://journals.sagepub.com/doi/epub/10.1177/25152459241231581) recently argued that careless responding on surveys - or at least a specific form of it (completely random responding) - can substantially distort the observed correlations between variables. They point out this occurs when the mean of either variable involved in the correlation diverges from the center point of the scale. E.g., on a 1-7 Likert scale, observed correlations are biased when the mean of either scale is more or less than 4.
+
+They provide a very useful [Shiny app](https://fuhred.shinyapps.io/CarelessRespondingSimulator/) to help illustrate this effect. 
+
+Somewhat surprisingly given that they had most of the code to do so, Stosic et al. (2024) did not provide a simulation study to quantify the magnitude of this bias under different conditions. The goal of this session is to fill this gap and create such a simulation.
+
+# Assignment
+
+Purpose of this assignment: This assignment is intended to let you practice a smaller version of what you'll have to do in your assignment.
+
+It would be too much to ask you to write this from scratch. So, I have written data generation and analysis functions that can conceptually reproduce the effects described by Stosic et al.'s (2024) (see below). I also wrote a (slightly simpler) Shiny app: see the separate Quarto (`impact_of_careless_responding_on_correlations_interactive.qmd`) document. To run the Shiny app, open that document and click "Run document". If you haven't come across it before, Quarto is the successor to RMarkdown and can do more advanced things, including embedding Shiny apps inside them.
+
+You should:
+
+- Decide which range of conditions is meaningful and useful to simulate. 
+- Decide which outcome metric is meaningful to quantify. I suggest you use the common metric of bias "Mean Absolute Error", which is the average of differences between the population correlation and the observed correlation. I implement this below (see bias_mean_absolute_error variable). Other metrics are possible if you prefer, including Root Mean Square Error, and others.
+- Change the simulation code to implement these conditions. Remember that any summaries of the conditions that were simulated (e.g., in the tables or plots) must match the conditions that were simulated. For example, if a simulation generated and analyzed data under equal variances and unequal variances, all summaries of the results would need to produce separate estimates of the results under both equal variances and unequal variances. That is, the two stages of "generate data" and "summarize across iterations" must match the conditions they are generating and summarizing over.
+- Your summary of the results should contain:
+  - A table of the results.
+  - A plot of the results. I suggest you try a multiverse plot using the `multiverse_plot()` function that is defined with examples in `multiverse_plot_for_simulation_studies.Rmd`. You can copy the code for the function into this document. You will need to wrangle the simulation data into a suitable shape to be plotted by the multiverse function. See that RMarkdown document for examples of this.
+  - A short written explanation of the findings and their implications, i.e., what sort of conditions give rise to what sort of bias.
+  
+# Assumptions & definitions 
+
+- Careless responding is defined as random responding, i.e., all response options are as likely as one another (aka a uniform distribution)
+- The scale response options must be bounded/truncated, i.e., on a 1-7 Likert scale participants cannot respond below 1 or above 7. To generate data like this, the functions `faux::norm2trunc()` is used to convert normally distributed data (generating using `rnorm()`) to truncated data (i.e., range 1-7 with a specified mean and SD). This therefore simulates participant-level mean scores from a multi-item self-report scale with many items (i.e., because the simulated data can have decimals, not just the integers 1-7).
+
+# Simulation
+
+```{r}
+
+# dependencies ----
+library(tidyr)
+library(dplyr)
+library(tibble)
+library(forcats)
+library(purrr) 
+library(faux)
+library(ggplot2)
+library(ggtext)
+library(janitor)
+library(knitr)
+library(kableExtra)
+
+
+# define generate data function ----
+generate_data <- function(n,
+                          prob_careless,
+                          rho_careful,
+                          mu_x_careful,
+                          mu_y_careful) { 
+
+  n_careless <- floor(n * prob_careless)
+  n_careful <- n - n_careless
+  
+  data_careful <- 
+    faux::rnorm_multi(n = n_careful, 
+                      mu = c(y = 1, x = 1), 
+                      sd = c(1, 1), 
+                      r = matrix(c(1, rho_careful, 
+                                   rho_careful, 1), 
+                                 ncol = 2)) |>
+    mutate(type = "careful") |>
+    # convert to bounded/truncated responses, simulating results from a multi-item Likert scale with many items
+    mutate(x = faux::norm2trunc(x, min = 1, max = 7, mu = mu_x_careful, sd = 1),
+           y = faux::norm2trunc(y, min = 1, max = 7, mu = mu_y_careful, sd = 1))
+
+  data_careless <-
+    data.frame(x = runif(n = n_careless, min = 1, max = 7),
+               y = runif(n = n_careless, min = 1, max = 7)) |>
+    mutate(type = "careless") 
+  
+  data <- bind_rows(data_careful,
+                    data_careless) |>
+    rownames_to_column(var = "id")
+  
+  return(data)
+}
+
+# define data analysis function ----
+analyse_data <- function(data) {
+  
+  fit_all <- cor.test(data$y,
+                      data$x, 
+                      method = "pearson")
+  
+  dat_careful <- data |>
+    filter(type == "careful")
+  
+  fit_careful <- cor.test(dat_careful$y,
+                          dat_careful$x, 
+                          method = "pearson")
+  
+  dat_careless <- data |>
+    filter(type == "careless")
+  
+  fit_careless <- cor.test(dat_careless$y,
+                           dat_careless$x, 
+                           method = "pearson")
+  
+  results <- tibble(r_all = fit_all$estimate,
+                    p_all = fit_all$p.value,
+                    r_careful = fit_careful$estimate,
+                    p_careful = fit_careful$p.value,
+                    r_careless = fit_careless$estimate,
+                    p_careless = fit_careless$p.value,
+                    meanx_careful = mean(dat_careful$x),
+                    meany_careful = mean(dat_careful$y))
+  
+  return(results)
+}
+
+# set seed
+set.seed(42)
+
+
+# simulation conditions ----
+experiment_parameters_grid <- expand_grid(
+  n = 800, 
+  prob_careless = 0.15,
+  rho_careful = 0, 
+  mu_x_careful = 2,
+  mu_y_careful = 2
+)
+
+# run simulation ----
+simulation <- 
+  # using the experiment parameters
+  experiment_parameters_grid |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n,
+                                    prob_careless,
+                                    rho_careful,
+                                    mu_x_careful,
+                                    mu_y_careful),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results = pmap(list(generated_data),
+                                 analyse_data))
+
+```
+
+## Illustrate effect with results from a single iteration
+
+```{r fig.height=4, fig.width=9}
+
+# if multiple iterations are run, pull out just one of them for plotting
+iteration_plotted <- 1
+
+# scatter plots
+## reshape data
+dat_all <- 
+  bind_rows(simulation$generated_data[[iteration_plotted]] |>
+              mutate(type = case_when(type == "careful" ~ "True effect\n(careful responding)",
+                                      type == "careless" ~ "Noise\n(careless responding)")),
+            simulation$generated_data[[iteration_plotted]] |>
+              mutate(type = "Observed effect\n(careful + careless)")) |>
+  mutate(type = fct_relevel(type, "True effect\n(careful responding)", "Noise\n(careless responding)", "Observed effect\n(careful + careless)"))
+
+round_p_apa <- function(p) {
+  ifelse(p < .001, "< .001", paste("= ", formatC(p, format = "f", digits = 3), sep = ""))
+}
+
+summary <- simulation$analysis_results[[iteration_plotted]] |>
+  pivot_longer(cols = everything(),
+               names_to = c("metric", "type"),
+               values_to = "values",
+               names_sep = "_") |>
+  pivot_wider(names_from = "metric",
+              values_from = "values") |>
+  mutate(r = round_half_up(r, digits = 2),
+         p = round_p_apa(p)) |>
+  mutate(type = case_when(type == "careful" ~ "True effect\n(careful responding)",
+                          type == "careless" ~ "Noise\n(careless responding)",
+                          type == "all" ~ "Observed effect\n(careful + careless)"),
+         type = fct_relevel(type, "True effect\n(careful responding)", "Noise\n(careless responding)", "Observed effect\n(careful + careless)"))
+
+## plot
+ggplot(dat_all, aes(x, y)) +
+    geom_hline(yintercept = 4, linetype = "dotted", size = 1) +
+    geom_vline(xintercept = 4, linetype = "dotted", size = 1) +
+    geom_hline(data = summary |> drop_na(), 
+               aes(yintercept = meany), linetype = "solid", color = "purple", size = 1) +
+    geom_vline(data = summary |> drop_na(), 
+               aes(xintercept = meanx), linetype = "solid", color = "purple", size = 1) +
+    geom_point(alpha = 0.3, color = "grey50") +
+    geom_smooth(method = "lm", color = "chartreuse4") +
+    scale_color_viridis_d(begin = 0.4, end = 0.6) +
+    geom_richtext(data = summary, 
+                  aes(x = 1.25, y = 6.5, label = paste("<i>r</i> =", r, ", <i>p</i>", p)), 
+                  hjust = 0, 
+                  vjust = 0.5, 
+                  size = 4, 
+                  color = "chartreuse4") +
+    scale_y_continuous(breaks = c(1,2,3,4,5,6,7)) +
+    scale_x_continuous(breaks = c(1,2,3,4,5,6,7)) +
+    coord_cartesian(xlim = c(1, 7), ylim = c(1, 7)) +
+    xlab("Variable X") +
+    ylab("Variable Y") +
+    facet_wrap(~ type) +
+    theme_linedraw() +
+    theme(legend.position = "inside", 
+          legend.position.inside = c(.9, .15),
+          panel.spacing = unit(1.5, "lines"),
+          aspect.ratio = 1)
+
+```
+
+## Simulate many conditions
+
+And summarize bias (Mean Absolute Error) between population correlation ($\rho$) and observed correlation (r). 
+
+### Table 
+
+```{r}
+
+# summarise simulation results over the iterations ----
+simulation_summary <- simulation |>
+  unnest(analysis_results) |>
+  summarize(mean_r_careful = mean(r_careful),
+            mean_r_careless = mean(r_careless),
+            mean_r_all = mean(r_all),
+            bias_mean_absolute_error = mean(r_all - rho_careful),
+            .groups = "drop") |>
+  select(mean_r_careful,
+         mean_r_careless,
+         mean_r_all,
+         bias_mean_absolute_error)
+
+# print table
+simulation_summary |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 2) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+### Plot
+
+eg multiverse plot or other 
+
+```{r}
+
+
+
+```
+
+### Summary and implications
+
+[written description here]
+
+# Session info
+
+```{r}
+
+sessionInfo()
+
+```
+
+

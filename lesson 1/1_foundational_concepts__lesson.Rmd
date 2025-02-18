@@ -5,12 +5,17 @@ author: "Ian Hussey"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
   html_document:
+    code_download: true
     code_folding: show
     highlight: haddock
     theme: flatly
     toc: yes
     toc_float: yes
 ---
+
+# License
+
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.en)
 
 ```{r setup, include=FALSE}
 
@@ -22,7 +27,9 @@ options(scipen=999)
 
 ```
 
-```{r dependencies and settings}
+# Dependencies
+
+```{r}
 
 # dependencies
 library(tidyverse)

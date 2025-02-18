@@ -1,0 +1,560 @@
+---
+title: "The statistical power of assumptions tests and the conditional use of non-parameteric tests"
+author: "Ian Hussey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+```{r}
+
+# dependencies
+library(tidyr)
+library(dplyr)
+library(forcats)
+library(readr)
+library(purrr) 
+library(ggplot2)
+library(sn)
+library(knitr)
+library(kableExtra)
+
+```
+
+# Overview
+
+What do most statistics textbooks tell you to do when trying to test if two groups' means differ?
+
+1. Check assumptions of an independent Student's t-test are met, e.g., normality of data and homogeneity of variances.
+2. If so, run an interpret an independent Student's t-test.
+3. If not, then perhaps perhaps either 'interpret results with caution' (which always feels vague) or run and interpret a non-parametric test instead.
+
+Why? What benefits are there for doing so? Or what bad things happen if you don't?
+
+In a previous session, we observed that violations of the assumption of normality actually has very little impact on the statistical power of a t-test, as long as the two conditions have similarly non-normal data, which is plausible in many situations. Of course, non-normality does distort estimates of population parameters and standardized effect sizes - but often not the p values themselves. This lesson seeks to answer two related questions:
+
+1. Just like hypothesis tests, assumptions tests are just inferential tests of other properties (e.g., differences in SDs rather than differences in means), and as such they have false-positive rates and false-negative rates (statistical power). What is the power of these tests under different degrees of violations of assumptions? I.e. what proportion of the time do they get it wrong?
+2. What is the aggregate benefit of choosing a hypothesis test based on the results of assumption tests? This multi-step researcher behavior can itself be simulated. 
+
+# Assumption of normality
+
+## Illustrate non-normality 
+
+In this case using skewed data, although non-normality could take very many different forms.
+
+```{r}
+
+rsn(n = 100000, 
+    xi = 0, 
+    omega = 1, 
+    alpha = 0) |>
+  hist(main = "Skew-normal data when alpha is large (0)", xlab = "Score")
+
+rsn(n = 100000, 
+    xi = 0, 
+    omega = 1, 
+    alpha = 1) |>
+  hist(main = "Skew-normal data when alpha is large (1)", xlab = "Score")
+
+rsn(n = 100000, 
+    xi = 0, 
+    omega = 1, 
+    alpha = 2) |>
+  hist(main = "Skew-normal data when alpha is large (2)", xlab = "Score")
+
+rsn(n = 100000, 
+    xi = 0, 
+    omega = 1, 
+    alpha = 3) |>
+  hist(main = "Skew-normal data when alpha is large (3)", xlab = "Score")
+
+rsn(n = 100000, 
+    xi = 0, 
+    omega = 1, 
+    alpha = 6) |>
+  hist(main = "Skew-normal data when alpha is large (6)", xlab = "Score")
+
+rsn(n = 100000, 
+    xi = 0, 
+    omega = 1, 
+    alpha = 9) |>
+  hist(main = "Skew-normal data when alpha is large (9)", xlab = "Score")
+
+rsn(n = 100000, 
+    xi = 0, 
+    omega = 1, 
+    alpha = 12) |>
+  hist(main = "Skew-normal data when alpha is large (6)", xlab = "Score")
+
+```
+
+## Power of Kolmogov-Smirnov test with skew-normal data
+
+The assumption of normality can be assessed using multiple tests, including the Kolmogov-Smirnov test. This test assesses whether two distributions come from the same distribution. It is known to have low power: ie in low sample sizes, this test seldomly correctly detects when the two samples come from different distributions.
+
+Slightly confusingly, although the tests compares two samples, it can also be used to test *one* sample for normality by comparing the one *observed* sample with a second hypothetical perfectly normal distribution.  
+
+Let's demonstrate that the test does indeed have low power before we move on to an alternative test.
+
+### In a single sample
+
+This generates data from a single sample and the analysis only tests the assumption of normality. This is a useful first step to developing the code.
+
+```{r fig.height=5, fig.width=10}
+
+# remove all objects from environment ----
+rm(list = ls())
+
+
+# set the seed ----
+# for the pseudo random number generator to make results reproducible
+set.seed(42)
+
+
+# define data generating function ----
+generate_data <- function(n,
+                          location, # location, akin to mean
+                          scale, # scale, akin to SD
+                          skew) { # slant/skew. When 0, produces normal/gaussian data
+  
+  data <- 
+    tibble(score = rsn(n = n, 
+                       xi = location, # location, akin to mean
+                       omega = scale, # scale, akin to SD
+                       alpha = skew)) # slant/skew. When 0, produces normal/gaussian data
+  
+  return(data)
+}
+
+
+# define data analysis function ----
+analyse_data <- function(data) {
+  
+  fit <- ks.test(data$score, "pnorm", mean = mean(data$score), sd = sd(data$score))
+  results <- tibble(p = fit$p.value)
+  
+  return(results)
+}
+
+
+# define experiment parameters ----
+experiment_parameters_grid <- expand_grid(
+  n = seq(from = 10, to = 100, by = 10),
+  location = 0, # location, akin to mean
+  scale = 1,    # scale, akin to SD
+  skew = c(0, 1, 2, 3, 6, 9, 12),     # slant/skew. When 0, produces normal/gaussian data
+  iteration = 1:1000
+)
+
+
+# run simulation ----
+simulation <- 
+  # using the experiment parameters
+  experiment_parameters_grid |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n,
+                                    location,
+                                    scale,
+                                    skew),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results = pmap(list(generated_data),
+                                 analyse_data))
+
+# summarise simulation results over the iterations ----
+## ie what proportion of p values are significant (< .05)
+simulation_summary <- simulation |>
+  unnest(analysis_results) |>
+  mutate(n = as.factor(n)) |>
+  group_by(n, 
+           location, 
+           scale, 
+           skew) |>
+  summarize(proportion_of_significant_results = mean(p < .05),
+            .groups = "drop")
+
+simulation_summary |>
+  #filter(proportion_of_significant_results >= .8) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+Very low power in common sample sizes. Let's examine the Shapiro-Wilk's test instead. 
+
+## Power of Shapiro-Wilk's test with skew-normal data
+
+### In a single sample
+
+This generates data from a single sample and the analysis only tests the assumption of normality. This is a useful first step to developing the code.
+
+```{r fig.height=5, fig.width=10}
+
+# remove all objects from environment ----
+rm(list = ls())
+
+
+# set the seed ----
+# for the pseudo random number generator to make results reproducible
+set.seed(42)
+
+
+# define data generating function ----
+generate_data <- function(n,
+                          location, # location, akin to mean
+                          scale, # scale, akin to SD
+                          skew) { # slant/skew. When 0, produces normal/gaussian data
+  
+  data <- 
+    tibble(score = rsn(n = n, 
+                       xi = location, # location, akin to mean
+                       omega = scale, # scale, akin to SD
+                       alpha = skew)) # slant/skew. When 0, produces normal/gaussian data
+  
+  return(data)
+}
+
+
+# define data analysis function ----
+analyse_data <- function(data) {
+  
+  fit <- shapiro.test(data$score)
+  results <- tibble(p = fit$p.value)
+  
+  return(results)
+}
+
+
+# define experiment parameters ----
+experiment_parameters_grid <- expand_grid(
+  n = seq(from = 10, to = 100, by = 10),
+  location = 0, # location, akin to mean
+  scale = 1,    # scale, akin to SD
+  skew = c(0, 1, 2, 3, 6, 9, 12),     # slant/skew. When 0, produces normal/gaussian data
+  iteration = 1:1000
+)
+
+
+# run simulation ----
+simulation <- 
+  # using the experiment parameters
+  experiment_parameters_grid |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n,
+                                    location,
+                                    scale,
+                                    skew),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results = pmap(list(generated_data),
+                                 analyse_data))
+
+# summarise simulation results over the iterations ----
+## ie what proportion of p values are significant (< .05)
+simulation_summary <- simulation |>
+  unnest(analysis_results) |>
+  mutate(n = as.factor(n)) |>
+  group_by(n, 
+           location, 
+           scale, 
+           skew) |>
+  summarize(proportion_of_significant_results = mean(p < .05),
+            .groups = "drop")
+
+simulation_summary |>
+  filter(proportion_of_significant_results >= .95) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+### In either of two samples
+
+To make the stimulation more realistic, we should test for normality in each of two samples, and return a decision of non-normality if it is found in either.
+
+```{r fig.height=5, fig.width=10}
+
+# remove all objects from environment ----
+rm(list = ls())
+
+
+# set the seed ----
+# for the pseudo random number generator to make results reproducible
+set.seed(42)
+
+
+# define data generating function ----
+generate_data <- function(n,
+                          location, # location, akin to mean
+                          scale, # scale, akin to SD
+                          skew) { # slant/skew. When 0, produces normal/gaussian data
+  
+  
+  data_control <- 
+    tibble(condition = "control",
+           score = rsn(n = n, 
+                       xi = location, # location, akin to mean
+                       omega = scale, # scale, akin to SD
+                       alpha = skew)) # slant/skew. When 0, produces normal/gaussian data
+  
+  data_intervention <- 
+    tibble(condition = "intervention",
+           score = rsn(n = n, 
+                       xi = location, # location, akin to mean
+                       omega = scale, # scale, akin to SD
+                       alpha = skew)) # slant/skew. When 0, produces normal/gaussian data
+  
+  data <- bind_rows(data_control,
+                    data_intervention) 
+  
+  return(data)
+}
+
+
+# define data analysis function ----
+analyse_data <- function(data) {
+  
+  fit_intervention <- shapiro.test(data$score[data$condition == "intervention"])
+  fit_control <- shapiro.test(data$score[data$condition == "control"])
+  
+  results <- tibble(p_intervention = fit_intervention$p.value, 
+                    p_control = fit_control$p.value) 
+  
+  return(results)
+}
+
+
+# define experiment parameters ----
+experiment_parameters_grid <- expand_grid(
+  n = seq(from = 10, to = 100, by = 10), # n per condition, not total
+  location = 0, # location, akin to mean
+  scale = 1,    # scale, akin to SD
+  skew = c(0, 1, 2, 3, 6, 9, 12),     # slant/skew. When 0, produces normal/gaussian data
+  iteration = 1:1000
+)
+
+
+# run simulation ----
+simulation <- 
+  # using the experiment parameters
+  experiment_parameters_grid |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n,
+                                    location,
+                                    scale,
+                                    skew),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results = pmap(list(generated_data),
+                                 analyse_data))
+
+# summarise simulation results over the iterations ----
+## ie what proportion of p values are significant (< .05)
+simulation_summary <- simulation |>
+  unnest(analysis_results) |>
+  mutate(n = as.factor(n),
+         lower_p = ifelse(p_intervention < p_control, p_intervention, p_control)) |>
+  group_by(n, 
+           location, 
+           scale, 
+           skew) |>
+  summarize(proportion_of_significant_results = mean(lower_p < .05),
+            .groups = "drop")
+
+simulation_summary |>
+  filter(proportion_of_significant_results >= .95) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+## Conditionally running a Welches' t-test or a Wilcoxon signed-rank test depending on Shapiro-Wilk's test for normality
+
+This stimulation tests normality in both conditions' data, as well as testing for differences in the central tendency using both parametric and non-parametric tests. Which test of the differences in central tendency is used for each simulated data set is determined by whether the assumption of normality is detectably violated.
+
+```{r fig.height=5, fig.width=10}
+
+# remove all objects from environment ----
+rm(list = ls())
+
+
+# set the seed ----
+# for the pseudo random number generator to make results reproducible
+set.seed(42)
+
+
+# define data generating function ----
+generate_data <- function(n,
+                          location_control, # location, akin to mean
+                          location_intervention,
+                          scale, # scale, akin to SD
+                          skew) { # slant/skew. When 0, produces normal/gaussian data
+  
+  
+  data_control <- 
+    tibble(condition = "control",
+           score = rsn(n = n, 
+                       xi = location_control, # location, akin to mean
+                       omega = scale, # scale, akin to SD
+                       alpha = skew)) # slant/skew. When 0, produces normal/gaussian data
+  
+  data_intervention <- 
+    tibble(condition = "intervention",
+           score = rsn(n = n, 
+                       xi = location_intervention, # location, akin to mean
+                       omega = scale, # scale, akin to SD
+                       alpha = skew)) # slant/skew. When 0, produces normal/gaussian data
+  
+  data <- bind_rows(data_control,
+                    data_intervention) 
+  
+  return(data)
+}
+
+
+# define data analysis function ----
+analyse_data <- function(data) {
+  
+  assumption_test_intervention   <- shapiro.test(data$score[data$condition == "intervention"])
+  assumption_test_control        <- shapiro.test(data$score[data$condition == "control"])
+  
+  hypothesis_test_students_t      <- t.test(formula = score ~ condition, 
+                                            data = data,
+                                            var.equal = TRUE,
+                                            alternative = "two.sided")
+  
+  hypothesis_test_mann_whitney_u <- wilcox.test(formula = score ~ condition, 
+                                                data = data,
+                                                alternative = "two.sided")
+  
+  results <- tibble(
+    assumption_test_p_intervention = assumption_test_intervention$p.value, 
+    assumption_test_p_control = assumption_test_control$p.value,
+    hypothesis_test_p_students_t = hypothesis_test_students_t$p.value, 
+    hypothesis_test_p_mann_whitney_u = hypothesis_test_mann_whitney_u$p.value
+  ) |>
+    mutate(hypothesis_test_p_conditional = ifelse(min(assumption_test_p_intervention, assumption_test_p_control) < .05, 
+                                                  hypothesis_test_p_mann_whitney_u,
+                                                  hypothesis_test_p_students_t))
+  
+  return(results)
+}
+
+
+# define experiment parameters ----
+experiment_parameters_grid <- expand_grid(
+  n = seq(from = 10, to = 100, by = 10), # n per condition, not total
+  location_control = 0, # location, akin to mean
+  location_intervention = 0.2,
+  scale = 1,    # scale, akin to SD
+  skew = c(0, 1, 2, 3, 6, 9, 12),     # slant/skew. When 0, produces normal/gaussian data
+  iteration = 1:1000
+)
+
+
+# run simulation ----
+simulation <- 
+  # using the experiment parameters
+  experiment_parameters_grid |>
+  
+  # generate data using the data generating function and the parameters relevant to data generation
+  mutate(generated_data = pmap(list(n,
+                                    location_control,
+                                    location_intervention,
+                                    scale,
+                                    skew),
+                               generate_data)) |>
+  
+  # apply the analysis function to the generated data using the parameters relevant to analysis
+  mutate(analysis_results = pmap(list(generated_data),
+                                 analyse_data))
+
+# summarise simulation results over the iterations ----
+## ie what proportion of p values are significant (< .05)
+simulation_summary <- simulation |>
+  unnest(analysis_results) |>
+  mutate(n_per_group = as.factor(n)) |>
+  group_by(n_per_group, 
+           location_control,
+           location_intervention,
+           scale, 
+           skew) |>
+  summarize(power_assumption_test = mean(assumption_test_p_intervention < .05 | assumption_test_p_control < .05),
+            power_u = mean(hypothesis_test_p_mann_whitney_u < .05),
+            power_t = mean(hypothesis_test_p_students_t < .05),
+            power_u = mean(hypothesis_test_p_mann_whitney_u < .05),
+            power_conditional = mean(hypothesis_test_p_conditional < .05),
+            .groups = "drop") |>
+  mutate(conditional_better_than_t = power_conditional > power_t,
+         conditional_better_than_u = power_conditional > power_u,
+         u_better_than_t = power_u > power_t,
+         conditional_much_better_than_t = (power_conditional - power_t) >= .05,
+         conditional_much_better_than_u = (power_conditional - power_u) >= .05,
+         u_much_better_than_t = (power_u - power_t) >= .05)
+
+simulation_summary |>
+  arrange(skew, n_per_group) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+simulation_summary |>
+  arrange(skew, n_per_group) |>
+  select(n_per_group, skew, power_t, power_u, power_conditional, conditional_better_than_t) |>
+  mutate(power_diff_cond_t = power_conditional - power_t) |>
+  filter(conditional_better_than_t == TRUE & 
+           power_diff_cond_t >= 0.05) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+simulation_summary |>
+  arrange(skew, n_per_group) |>
+  select(n_per_group, skew, power_t, power_u, power_conditional, conditional_better_than_u) |>
+  mutate(power_diff_cond_u = power_conditional - power_u) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+simulation_summary |>
+  arrange(skew, n_per_group) |>
+  select(n_per_group, skew, power_t, power_u, power_conditional, conditional_better_than_t) |>
+  mutate(power_diff_u_t = power_u - power_t) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+simulation_summary |>
+  summarize(percent_u_better_than_t = mean(u_better_than_t)*100,
+            percent_conditional_better_than_t = mean(conditional_better_than_t)*100,
+            percent_conditional_better_than_u = mean(conditional_better_than_u)*100) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 1) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+simulation_summary |>
+  summarize(percent_u_much_better_than_t = mean(u_much_better_than_t)*100,
+            percent_conditional_much_better_than_t = mean(conditional_much_better_than_t)*100,
+            percent_conditional_much_better_than_u = mean(conditional_much_better_than_u)*100) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 1) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+# Session info
+
+```{r}
+
+sessionInfo()
+
+```
+
+
