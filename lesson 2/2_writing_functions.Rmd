@@ -4,12 +4,15 @@ author: "Ian Hussey"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
   html_document:
+    code_download: true
     code_folding: show
     highlight: haddock
     theme: flatly
     toc: yes
     toc_float: yes
 ---
+
+# Overview
 
 Two of the key steps in a simulation study (generate data and analyze data) require us to know how to write functions. This R Markdown lesson practices this.
 
@@ -30,6 +33,7 @@ options(scipen = 999)
 library(dplyr)
 library(tibble)
 library(forcats)
+library(report)
 
 ```
 
@@ -103,10 +107,6 @@ round_half_up(5.5)
 
 ```
 
-## TODO add content on variable scoping inside functions
-
-\TODO
-
 ## General structure of a function
 
 Functions (usually) have 'inputs', they have code that they run ('do stuff'), and they (almost always) return 'outputs'. The often specify their requirements and include checks that their inputs are correctly formatted.
@@ -141,99 +141,89 @@ function_name <- function(argument_1, # first argument is often the data, if the
 
 ```
 
-## Example function: return rule of thumb magnitude label for Cohen's d value
+## Example function: t-test p value
+
+```{r}
+
+# use this data to build and test your function
+data_simulated_intervention <- 
+  tibble(condition = "intervention", 
+         score = rnorm(n = 50, mean = 0, sd = 1))
+
+data_simulated_control <- 
+  tibble(condition = "control", 
+         score = rnorm(n = 50, mean = 0, sd = 1))
+
+data_simulated <- 
+  bind_rows(data_simulated_intervention,
+            data_simulated_control)
+
+```
 
 ```{r}
 
 # define function
-interpret_cohens_d_custom <- function(cohens_d) {
-  # checks
-  if (!is.numeric(cohens_d)) {
-    stop("The Cohen's d value must be numeric.")
-  }
+t_test_p_value <- function(data) {
+
+  res <- t.test(formula = score ~ condition, 
+                data = data)
   
-  # requirements
-  require(dplyr)
-  require(tibble)
-  
-  # do stuff
-  result <- data.frame(d = abs(cohens_d)) |>
-    mutate(interpretation = case_when(d < .2 ~ "very small",
-                                      d >= .2 & d < .5 ~ "small",
-                                      d >= .5 & d < .8 ~ "medium", 
-                                      d >= .8 ~ "large")) |>
-    pull(interpretation)
-  
-  # return result
-  return(result)
+  return(res$p.value)
 }
 
 # call function
-# lets do this with lots of different inputs to make sure it gives us the result we expect
-interpret_cohens_d_custom(0.1)
-interpret_cohens_d_custom(0.2)
-interpret_cohens_d_custom(0.5)
-interpret_cohens_d_custom(0.8)
-interpret_cohens_d_custom(0.99)
-interpret_cohens_d_custom(-0.55)
-#interpret_cohens_d_custom("should throw error with this input")
+t_test_p_value(data_simulated)
 
 ```
 
-## TODO add content on how to develop a function
+## General things to remember when writing functions
 
-- always start with do stuff, only wrap with input and output when it works. why? so you don't have to fight variable scoping.
-- always remember to swap out your inputs for variables or your code will run but produce the wrong results
-- think about 
-
-```{r}
-
-# do stuff
-  
-cohens_d <- .47
-
-my_func <- function(cohens_d){
-  
-  # cohens_d <- .47
-
-  result <- data.frame(d = abs(cohens_d)) |>
-    mutate(interpretation = case_when(d < .2 ~ "very small",
-                                      d >= .2 & d < .5 ~ "small",
-                                      d >= .5 & d < .8 ~ "medium", 
-                                      d >= .8 ~ "large")) |>
-    pull(interpretation)
-  
-  return(result)
-}
-
-```
-
-## Remember:
-
-- The function must be present in your environment to be usable, and must be called to be used
-- Build the 'do stuff' part outside of a function first!
 - If you can't immediately write the code, write pseudo-code first! 
+- Build the 'do stuff' part outside of a function first!
+- Wrap the 'do stuff' with input and output after you have 'do stuff' working. Why: so you don't have to fight variable scoping.
+- The function must be present in your environment to be usable, and must be called to be used
 - Check that your function actually works as you expect, not just that it runs. Give it lots of different input values that should and should not work, and check you get the correct outputs.
-- don't try to abstract more than you need.
+- Don't try to abstract more than you need. One function should do one thing. Elaborate the function only as needed.
 
 # Practice writing functions
 
-## APA-style rounding of p values
-
-Goal: Convert a *p* value's significance to create APA-format table stars (i.e., "\*\*\*" vs. "\*\*" vs. "\*" vs "ns")
+## Calculate mean dropping NAs
 
 ```{r}
 
-# convert a p value to sig stars
-p_value_to_significance_stars <- function(p_value){
-  
-  # do stuff
-  
-  return(result)
-}
 
-p_value_to_significance_stars(.06)
-p_value_to_significance_stars(.02)
+
+```
+
+## Calculate SD dropping NAs
+
+```{r}
+
+
+
+```
+
+## Calculate mean for each condition dropping NAs
+
+```{r}
+
+
+
+```
+
+## Calculate mean and SD for each condition dropping NAs
+
+```{r}
+
+
+
+```
+
+## Calculate mean and SD for each condition dropping NAs, then use them to calculate Cohen's d
+
+```{r}
+
+
 
 ```
 
@@ -250,24 +240,7 @@ data_simulated <- tibble(Y = rnorm(n = 100, mean = 0, sd = 1),
 
 cor_extraction <- function(data){
   
-  res_cor <- cor.test(data$X, data$Y)
-  
-  res <- list(res_cor$p.value,
-              res_cor$estimate)
-  
-  return(res)
-}
-
-res_a <- cor_extraction(data_simulated)
-res_a[[1]]
-
-
-cor_extraction <- function(data){
-  
-  res_cor <- cor.test(data$X, data$Y)
-  
-  res <- data.frame(p = res_cor$p.value,
-                    r = res_cor$estimate)
+  # do stuff
   
   return(res)
 }
@@ -276,36 +249,47 @@ cor_extraction(data_simulated)
 
 ```
 
-## p value from a t-test
+## Pearson's r from correlation test
 
-Goal: Fit an independent Student's t-test using `t.test(var.equal = TRUE)` and extract the p value. Return the results as a data frame with the p value in the column "p".
+Goal: Fit a correlation test using cor.test() and extract the p value and correlation
 
 ```{r}
 
 # use this data to build and test your function
-data_simulated_intervention <- tibble(condition = "intervention", 
-                                      score = rnorm(n = 50, mean = 0, sd = 1))
-
-data_simulated_control <- tibble(condition = "control", 
-                                 score = rnorm(n = 50, mean = 0, sd = 1))
-
-data_simulated <- 
-  bind_rows(data_simulated_intervention,
-            data_simulated_control)
+data_simulated <- tibble(Y = rnorm(n = 100, mean = 0, sd = 1),
+                         X = rnorm(n = 100, mean = 0, sd = 1))
 
 
-tttest_p <- function(data){
-  res_ttest <- t.test(score ~ condition,
-                      data = data)
+cor_extraction <- function(data){
   
-  res_p <- res_ttest$p.value
-  
-  res <- tibble(p = res_p)
+  # do stuff
   
   return(res)
 }
 
-tttest_p(data_simulated)
+cor_extraction(data_simulated)
+
+```
+
+## Pearson's r and its p value from correlation test
+
+Goal: Fit a correlation test using cor.test() and extract the p value and correlation
+
+```{r}
+
+# use this data to build and test your function
+data_simulated <- tibble(Y = rnorm(n = 100, mean = 0, sd = 1),
+                         X = rnorm(n = 100, mean = 0, sd = 1))
+
+
+cor_extraction <- function(data){
+  
+  # do stuff
+  
+  return(res)
+}
+
+cor_extraction(data_simulated)
 
 ```
 
@@ -332,22 +316,13 @@ data_simulated <-
 
 
 extract_d <- function(data){
-  res_cohens_d <- effsize::cohen.d(score ~ condition,
-                                   data = data)
   
-  res <- tibble(cohens_d = res_cohens_d$estimate,
-                cohens_d_ci_lower = res_cohens_d$conf.int[["lower"]],
-                cohens_d_ci_upper = res_cohens_d$conf.int[["upper"]])
+  # do stuff
   
   return(res)
 }
 
 extract_d(data_simulated)
-
-
-# library(broom)
-# library(parameters) # easystats
-
 
 ```
 
@@ -372,27 +347,11 @@ data_simulated <-
 
 
 analyze_data <- function(data) {
-  # dependencies
-  require(effsize)
-  require(tibble)
   
-  res_t_test <- t.test(formula = score ~ condition, 
-                       data = data,
-                       var.equal = TRUE,
-                       alternative = "two.sided")
-  
-  res_cohens_d <- effsize::cohen.d(formula = score ~ condition,  # new addition: also fit cohen's d
-                                   within = FALSE,
-                                   data = data)
-  
-  res <- tibble(p = res_t_test$p.value, 
-                cohens_d = res_cohens_d$estimate,  # new addition: save cohen's d and its 95% CIs to the results tibble
-                cohens_d_ci_lower = res_cohens_d$conf.int["lower"],
-                cohens_d_ci_upper = res_cohens_d$conf.int["upper"])
+  # do stuff
   
   return(res)
 }
-
 
 ```
 
@@ -420,18 +379,8 @@ data_simulated <-
 
 
 generate_data <- function(){
-  data_simulated_intervention <- tibble(condition = "intervention", 
-                                        score = rnorm(n = 50, mean = 0, sd = 1))
   
-  data_simulated_control <- tibble(condition = "control", 
-                                   score = rnorm(n = 50, mean = 0, sd = 1))
-  
-  data_simulated <- 
-    bind_rows(data_simulated_intervention,
-              data_simulated_control) |>
-    # control's factor levels must be ordered so that intervention is the first level and control is the second
-    # this ensures that positive cohen's d values refer to intervention > control and not the other way around.
-    mutate(condition = fct_relevel(condition, "intervention", "control"))
+  # do stuff
   
   return(data_simulated)
 }
@@ -448,18 +397,8 @@ Goal: What if we want to generate data with a different number of participants p
 ```{r}
 
 generate_data <- function(n_per_group){
-  data_simulated_intervention <- tibble(condition = "intervention", 
-                                        score = rnorm(n = n_per_group, mean = 0, sd = 1))
   
-  data_simulated_control <- tibble(condition = "control", 
-                                   score = rnorm(n = n_per_group, mean = 0, sd = 1))
-  
-  data_simulated <- 
-    bind_rows(data_simulated_intervention,
-              data_simulated_control) |>
-    # control's factor levels must be ordered so that intervention is the first level and control is the second
-    # this ensures that positive cohen's d values refer to intervention > control and not the other way around.
-    mutate(condition = fct_relevel(condition, "intervention", "control"))
+  # do stuff
   
   return(data_simulated)
 }
@@ -481,25 +420,15 @@ bind_rows(
 
 ```
 
-## Create a more flexible data generation function 
+## Create an even more flexible data generation function 
 
 Goal: Rewrite the data generation function to make it even more flexible: make all Ns, Ms, and SDs variables that are set by the inputs.
 
 ```{r}
 
 generate_data <- function(n_intervention, n_control = NA, m_intervention = 0, m_control = 0, sd_intervention = 1, sd_control = 1){
-  data_simulated_intervention <- tibble(condition = "intervention", 
-                                        score = rnorm(n = n_intervention, mean = m_intervention, sd = sd_intervention))
   
-  data_simulated_control <- tibble(condition = "control", 
-                                   score = rnorm(n = n_control, mean = m_control, sd = sd_control))
-  
-  data_simulated <- 
-    bind_rows(data_simulated_intervention,
-              data_simulated_control) |>
-    # control's factor levels must be ordered so that intervention is the first level and control is the second
-    # this ensures that positive cohen's d values refer to intervention > control and not the other way around.
-    mutate(condition = fct_relevel(condition, "intervention", "control"))
+  # do stuff
   
   return(data_simulated)
 }
@@ -513,6 +442,27 @@ generate_data(n_intervention = 25,
 # Notes
 
 Although we have practiced writing custom functions to extract statistical results / model parameters, it is worth knowing that the easystats family of packages includes [{parameters}](https://easystats.github.io/parameters/) package, which does a very good job of extracting model parameters from a very wide range of models including base R functions, lavaan, psych, and other packages. If you want to extract values from a model, consider using {parameters} to do a lot of the work for you when writing your function.
+
+Seperately, the [{report}](https://easystats.github.io/report/) package will fully report the results of many common analyses for you. e.g.:
+
+```{r}
+
+data_simulated_intervention <- 
+  tibble(condition = "intervention", 
+         score = rnorm(n = 50, mean = 0, sd = 1))
+
+data_simulated_control <- 
+  tibble(condition = "control", 
+         score = rnorm(n = 50, mean = 0, sd = 1))
+
+data_simulated <- 
+  bind_rows(data_simulated_intervention,
+            data_simulated_control)
+
+t.test(score ~ condition, data = data_simulated) |>
+  report::report()
+
+```
 
 This lesson does not cover documenting your functions well, organizing them into an R package to make them easy to load and include help menus, or writing unit tests them. These are all very worth doing. Look into the {roxygen} package.
 
