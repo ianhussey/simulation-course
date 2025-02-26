@@ -62,7 +62,8 @@ Note the population means are equivalent. What does a *t*-test test for?
 
 set.seed(42)
 
-t.test(rnorm(n = 50, m = 0, sd = 1), rnorm(n = 50, m = 0, sd = 1))
+t.test(rnorm(n = 50, m = 0, sd = 1), 
+       rnorm(n = 50, m = 0, sd = 1))
 
 ```
 
