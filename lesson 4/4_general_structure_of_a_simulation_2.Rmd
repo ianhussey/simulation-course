@@ -600,7 +600,7 @@ You must group by the things you manipulated in the expand grid! I can't give yo
 
 ```{r}
 
-# remove all objects from environment to ensure you're starting from a blank page ----
+# remove all objects from environment to ensure you're starting from a blank page
 rm(list = ls())
 
 # set seed
@@ -644,8 +644,12 @@ experiment_parameters <- expand_grid(
   mean_control = 0,
   mean_intervention = c(0, 0.5),
   sd = 1,
-  iteration = 1:1000 # note that number of iterations has been increased to provide more stable estimates / lower monte-carlo error. 'real' simulations would increase this further, but I want our code to run fast for teaching.
-) 
+  iteration = 1:10000 # note that number of iterations has been increased to provide more stable estimates / lower monte-carlo error. 
+) |>
+  # because mean_control is 0 and both SDs are 1, mean_intervention is really a proxy for Cohen's d
+  # because d = [mean_intervention - mean_control]/SD_pooled
+  # for clarity, let's just make a variable called population_effect_size
+  mutate(population_effect_size = paste0("Cohen's d = ", mean_intervention)) 
 
 # run simulation
 simulation <- experiment_parameters |>
@@ -659,15 +663,8 @@ simulation <- experiment_parameters |>
 
 # summarize across iterations
 simulation_summary <- simulation |>
-  
   # unnest results
   unnest(results) |>
-  
-  # because mean_control is 0 and both SDs are 1, mean_intervention is really a proxy for Cohen's d 
-  # because d = [mean_intervention - mean_control]/SD_pooled
-  # for clarity, let's just make a variable called population_effect_size
-  mutate(population_effect_size = paste0("Cohen's d = ", mean_intervention))|> 
-  
   # for each level of mean_intervention... 
   group_by(population_effect_size) |>
   # ... calculate proportion of iterations where significant results were found
@@ -699,6 +696,43 @@ ggplot(simulation_summary, aes(population_effect_size, power)) +
 - What are a Student's *t*-test's assumptions?
 
 ...What happens if these assumptions aren't met? We will cover this in the next class. 
+
+# Distribution of *p* values
+
+Let's return to the question we answered in the first lecture on using simulation to understand the distribution of *p*-values under the alternative vs. null hypothesis, but this time using the results of the tidy simulation above.
+
+Remember: this just plots the data in a different way to the above, but expresses the same information (the false-positive and true-positive rate). Plotting it the below way helps illustrate *why* the false-positive and false-negative rates are why they are. 
+
+```{r}
+
+# function to extract and plot p values
+plot_p_values <- function(data){ # assumes that data is a data frame with a column "p"
+  data |>
+    mutate(decision = ifelse(p < .05, "significant", "non-significant")) |>
+    ggplot(aes(p, fill = decision)) +
+    geom_histogram(binwidth = 0.05, boundary = 0) +
+    scale_fill_viridis_d(option = "mako", begin = 0.3, end = 0.7, direction = -1) +
+    scale_x_continuous(labels = c(0, 0.05, 0.25, 0.50, 0.75, 1.0),
+                       breaks = c(0, 0.05, 0.25, 0.50, 0.75, 1.0), 
+                       limits = c(0, 1)) +
+    theme_linedraw() +
+    ylab("Frequency") +
+    xlab("p value")
+}
+
+simulation |>
+  unnest(results) |>
+  filter(population_effect_size == "Cohen's d = 0") |>
+  plot_p_values() +
+  ggtitle("Distribution of p values under the null hypothesis")
+
+simulation |>
+  unnest(results) |>
+  filter(population_effect_size == "Cohen's d = 0.5") |>
+  plot_p_values() +
+  ggtitle("Distribution of p values under the alternative hypothesis")
+
+```
 
 # Homework / assignment
 
