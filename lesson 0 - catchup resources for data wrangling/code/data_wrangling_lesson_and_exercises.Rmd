@@ -1,0 +1,1029 @@
+---
+title: "Practicing data wrangling"
+author: "Template: Ian Hussey; content: [Student name]"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+# Overview
+
+This RMarkdown lesson introduces you to the most commonly used data processing (aka data wrangling) functions from the tidyverse packages (e.g., dplyr, tidyr, stringr). 
+
+# License
+
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.en)
+
+```{r, include=FALSE}
+
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+
+```
+
+# Dependencies
+
+```{r}
+
+library(dplyr)
+library(tidyr)
+library(readr)
+library(janitor) # for clean_names()
+library(stringr)
+library(knitr) # for kable()
+library(kableExtra) # for kable_extra()
+
+```
+
+# How to access help menu 
+
+For any function in a loaded package, simply type `?` before the function's name to call up the help menu. This helps you understand the function's purpose, its arguments, and outputs.
+
+```{r}
+
+?read_csv
+
+```
+
+- Why use {reader}'s `read_csv()` over the base R `read.csv()`? Because `read_csv()` is more explicit about what assumption it is making about column types, and prints warning messages about what it has assumed.
+
+# Relative vs. absolute paths & loading data
+
+This data comes from a real study on implicit and self-reported evaluations. The implementation of the procedure produced three data files: one for the demographics data, one for the self-reported evaluations, and one for the implicit measure (the 'Affect Misattribution Procedure'). This script uses each of these to learn and practice functions from the readr, dplyr, and tidyr libraries that are commonly used for data wrangling. In doing so, we will learn how to do many of the steps involved in data processing for a given experiment. 
+
+## Never use `setwd()`
+
+\TODO add explainer - breaks between machines, breaks between mac and windows
+
+
+## Use relative paths
+
+Either through Rmarkdown files, Quarto files, or in regular .R files using the {here} library (see https://here.r-lib.org/).
+
+```{r}
+
+# demographics data
+data_demographics_raw <- read_csv(file = "../data/raw/data_demographics_raw.csv") 
+
+# self report measure data
+data_selfreport_raw <- read_csv(file = "../data/raw/data_selfreport_raw.csv") 
+
+# affect attribution procedure data
+data_amp_raw <- read_csv(file = "../data/raw/data_amp_raw.csv")
+
+```
+
+# Count number of rows
+
+A very early step in any data processing is to understand how many rows are in a data frame, as this often represents the number of participants or total number of trials. This is useful to check at multiple steps of your data processing to make sure you have not done something wrong. 
+
+```{r}
+
+nrow(data_demographics_raw)
+
+nrow(data_selfreport_raw)
+
+nrow(data_amp_raw)
+
+```
+
+- Why are there different number of rows in the three data frames when this data all comes from the same participants? 
+- Why are the numbers not round?
+
+# The pipe (%>% or |>) 
+
+`%>%` is the original pipe created for the {magrittr} package and used throughout the tidyverse packages. It is slightly slower but also more flexible.
+
+`|>` is a version of the pipe more recently added to base-R. It is slightly faster but less flexible. 
+
+If you're not sure, it's easier to use `%>%`. 
+
+## What is the pipe?
+
+The output of what is left of the pipe is used as the input to the right of the pipe, usually as the first argument or the data argument.
+
+```{r}
+
+# use a function without the pipe
+example_without_pipe <- clean_names(data_demographics_raw)
+
+# use a function with the pipe. 
+example_with_pipe <- data_demographics_raw %>%
+  clean_names()
+
+# check they produce identical results
+identical(example_without_pipe, example_with_pipe)
+
+```
+
+## Why use the pipe?
+
+The pipe allows us to write code that reads from top to bottom, following a series of steps, in the way that humans organize and describe steps. Without the pipe, code is written from the inside out, in the way that the computer understands it but humans do not as easily.
+
+The utility of this becomes more obvious when there are many steps:
+
+```{r}
+
+# use a series of functions without the pipe
+example2_without_pipe <- summarise(group_by(mutate(rename(clean_names(dat = data_amp_raw), unique_id = subject, block = blockcode, trial_type = trialcode, rt = latency), fast_trial = ifelse(rt < 100, 1, 0)), unique_id), percent_fast_trials = mean(fast_trial)*100) 
+
+# use a series of functions with the pipe
+example2_with_pipe <- data_amp_raw %>%
+  # clean the column names
+  clean_names() %>%
+  # rename the columns
+  rename(unique_id = subject,
+         block = blockcode,
+         trial_type = trialcode,
+         rt = latency) %>%
+  # create a new variable using existing ones
+  mutate(fast_trial = ifelse(rt < 100, 1, 0)) %>%
+  # summarize across trials for each participant
+  group_by(unique_id) %>%
+  summarise(percent_fast_trials = mean(fast_trial)*100) 
+
+# check they produce identical results
+identical(example2_without_pipe, example2_with_pipe)
+
+```
+
+# Using the pipe & cleaning column names
+
+It is almost always useful to start by converting all column names to ones that play nice with R/tidyverse and which use the same naming convention (e.g., snake_case, which is standard in tidyverse).
+
+How would you bring up the help menu to understand how `janitor::clean_names()` works?
+
+Rewrite each of the below to use the pipe.
+
+```{r}
+
+data_demographics_clean_names <- data_demographics_raw %>%
+  clean_names() 
+
+data_selfreport_clean_names <- data_selfreport_raw %>%
+  clean_names() 
+
+data_amp_clean_names <- data_amp_raw %>%
+  clean_names() 
+
+
+# data_amp_raw %>%
+#   clean_names() -> data_amp_clean_names
+
+```
+
+# Viewing column names
+
+How would you know what variables are in a data frame? You can view the data frame, but it can also be useful to print them. Knowing what you have is one of the first steps to working with it.
+
+```{r}
+
+# print all column names
+colnames(data_demographics_clean_names)
+
+# print all column names as a vector
+dput(colnames(data_demographics_clean_names))
+
+data_demographics_clean_names %>%
+  colnames() %>%
+  dput()
+
+data_selfreport_clean_names %>%
+  colnames() %>%
+  dput()
+
+data_amp_clean_names %>%
+  colnames() %>%
+  dput()
+
+```
+
+# Renaming columns 
+
+Often variable names are not intuitive. An early step in any data wrangling is to make them more intuitive.
+
+Rename the self reports and AMP data too.
+
+```{r}
+
+data_demographics_renamed <- data_demographics_clean_names %>%
+  rename(unique_id = subject,
+         item = trialcode,
+         rt_ms = latency) 
+
+data_selfreport_renamed <- data_selfreport_clean_names %>%
+  rename(unique_id = subject,
+         item = trialcode,
+         rt_ms = latency) 
+
+data_amp_renamed <- data_amp_clean_names %>%
+  rename(unique_id = subject,
+         block_type = blockcode,
+         item = trialcode,
+         trial_id = blocknum_and_trialnum,
+         rt_ms = latency) 
+
+```
+
+# Selecting columns 
+
+Not all variables are useful to you. An early step in any data wrangling is to drop the columns that you don't need.
+
+Select the self reports and AMP data too.
+
+```{r}
+
+data_demographics_selected_columns <- data_demographics_renamed %>%
+  select(unique_id, item, response)
+
+data_selfreport_selected_columns <- data_selfreport_renamed %>%
+  select(unique_id, item, response, rt_ms)
+
+data_amp_selected_columns <- data_amp_renamed %>%
+  select(unique_id, 
+         # methods variables
+         block_type,
+         item,
+         trial_id,
+         # responses 
+         rt_ms, 
+         correct)
+
+```
+
+## More flexible selecting
+
+```{r}
+
+dat <- data.frame(
+  var_1_1 = rnorm(n = 100),
+  var_1_2 = rnorm(n = 100),
+  var_1_3 = rnorm(n = 100),
+  var_1_4 = rnorm(n = 100),
+  var_1_5 = rnorm(n = 100),
+  var_2_1 = rnorm(n = 100),
+  var_2_2 = rnorm(n = 100),
+  var_2_3 = rnorm(n = 100),
+  var_2_4 = rnorm(n = 100),
+  var_2_5 = rnorm(n = 100)
+)
+
+dat |>
+  select(starts_with("var_1")) 
+
+dat |>
+  select(ends_with("var_1")) 
+
+dat |>
+  select(contains("_1_")) 
+
+```
+
+# Practice the pipe again
+
+Combine the above function calls using pipes. Notice how this involves fewer objects in your environment, and therefore less potential for confusion or error.
+
+Remember: this is how we solve coding problems: break them down into smaller tasks and problems, get each of them working individually, then combine them together again. When you only see the end product, it's easy to think the author simply wrote the code as you see it, when they often wrote much more verbose chunks of code and then combined them together.
+
+Rewrite the rename and select calls for the AMP and self report data too.
+
+```{r}
+
+# remove all objects in environment
+rm(list = ls())
+
+
+data_demographics_trimmed <-
+  # read in the data
+  read_csv("../data/raw/data_demographics_raw.csv") %>%
+  
+  # convert to snake case
+  clean_names() %>%
+  
+  # make names more intuitive
+  rename(unique_id = subject,
+         item = trialcode) %>%
+  
+  # retain only columns of interest
+  select(unique_id, item, response)
+
+
+data_selfreport_trimmed <- 
+  read_csv("../data/raw/data_selfreport_raw.csv") %>%
+  clean_names() %>%
+  rename(unique_id = subject,
+         item = trialcode) %>%
+  select(unique_id, item, response)
+
+data_amp_trimmed <- 
+  read_csv("../data/raw/data_amp_raw.csv") %>%
+  clean_names() %>%
+  rename(unique_id = subject,
+         block_type = blockcode,
+         item = trialcode,
+         trial_id = blocknum_and_trialnum,
+         rt_ms = latency) %>%
+  select(unique_id, 
+         # methods variables
+         block_type,
+         item,
+         trial_id,
+         # responses 
+         rt_ms, 
+         correct)
+
+```
+
+# Counting frequencies 
+
+After renaming and selecting columns, we know what columns we have. But what rows do we have in each of these? What might we need to exclude, change, work with in some way later on? It is very useful to use `count()` to obtain the frequency of each unique value of a given column
+
+```{r}
+
+data_demographics_trimmed %>%
+  count(item)
+
+data_demographics_trimmed %>%
+  count(response)
+
+```
+
+```{r}
+
+data_selfreport_trimmed %>%
+  count(item)
+
+data_selfreport_trimmed %>%
+  count(response)
+
+```
+
+```{r}
+
+data_amp_trimmed %>%
+  count(item)
+
+data_amp_trimmed %>%
+  count(block_type)
+
+data_amp_trimmed %>%
+  count(correct)
+
+data_amp_trimmed %>%
+  count(rt_ms)
+
+```
+
+## Frequncies of sets of columns
+
+Note that it is also possible to use count to obtain the frequencies of sets of unique values across columns, e.g., unique combinations of item and response.
+
+```{r}
+
+data_demographics_trimmed %>%
+  count(item)
+
+data_demographics_trimmed %>%
+  count(response)
+
+data_demographics_trimmed %>%
+  count(item, response)
+
+```
+
+It can be useful to arrange the output by the frequencies.
+
+```{r}
+
+data_demographics_trimmed %>%
+  count(item, response) %>%
+  arrange(desc(n)) # arrange in descending order
+
+```
+
+# Filtering rows 
+
+Once we know the contents of our columns, we may wish to exclude some rows using `filter()`.
+
+You can specify the logical test for filtering in many ways, including equivalence (`==`), negation (`!=`), or membership (`%in%`). It is often better to define what you *do* want (using equivalence or membership) rather than what you *do not* want (negation), as negations are less robust to new data with weird values you didn't think of when you wrote the code. E.g., you could specify `gender != "non-binary"` but this would not catch `non binary`. If you were for example looking to include only men and women, instead use `gender %in% c("man", "woman")`.* 
+
+*[This is just an example; there is usually no good a priori reason to exclude gender diverse participants]
+
+```{r}
+
+# example using equivalence
+example_equivalence <- data_amp_trimmed %>%
+  filter(block_type == "test")
+
+# example using negation
+example_negation <- data_selfreport_trimmed %>%
+  filter(item != "instructions")
+
+# example using membership
+example_membership <- data_selfreport_trimmed %>%
+  filter(item %in% c("positive", "prefer", "like"))
+
+```
+
+## Multiple criteria, 'and' or 'or' combinations
+
+You can also have multiple criteria in your filter call, both of which have to be met (x `&` y), or either one of which have to be met (x `|` y).
+
+```{r}
+
+example_multiple_criteria_1 <- data_amp_trimmed %>%
+  filter(block_type != "test" & correct == 1)
+
+example_multiple_criteria_2 <- data_amp_trimmed %>%
+  filter(block_type != "test" | correct == 1)
+
+# note that these provide different results - make sure you understand why
+identical(example_multiple_criteria_1, example_multiple_criteria_2)
+
+```
+
+## Practice filtering
+
+Filter the self reports data frame to remove the instructions. Filter the AMP data frame to remove the practice blocks and the instruction trials.
+
+```{r}
+
+data_selfreport_trials <- data_selfreport_trimmed %>%
+  #filter(item != "instructions")
+  filter(item %in% c("positive", "prefer", "like"))
+
+# this probably contains things we don't want
+data_amp_trimmed %>%
+  count(item, block_type)
+
+# we exclude them
+data_amp_test_trials <- data_amp_trimmed %>%
+  filter(block_type == "test") %>%
+  filter(item != "instructions")
+
+# check they are excluded
+data_amp_test_trials %>%
+  count(item, block_type)
+
+```
+
+## More flexible filtering
+
+Return rows with exactly this contents
+
+```{r}
+
+data_amp_test_trials |>
+  filter(trial_id == "A") # 
+
+```
+
+Return rows containing contents but not exactly it
+
+```{r}
+
+library(stringr)
+
+test <- c("A", "AB", "B")
+
+test == "A"
+str_detect(test, "A")
+str_detect(test, "B")
+
+
+data_amp_test_trials |>
+  filter(str_detect(trial_id, "2_")) 
+
+```
+
+### Multiple logical tests
+
+```{r}
+
+# "|" = OR
+# "&" = AND
+
+data_amp_test_trials |>
+  filter(str_detect(trial_id, "2_") &
+           str_detect(trial_id, "3_"))
+
+
+data_amp_test_trials |>
+  mutate(rt_ms = ifelse(str_detect(trial_id, "2_"), rt_ms+100, rt_ms))
+
+```
+
+# Check your learning
+
+What is the difference between select and filter?
+
+Which is for rows and which is for columns?
+
+# Mutating: creating new columns or changing the contents of existing ones
+
+## Understanding `mutate()`
+
+`mutate()` is used to create new columns or to change the contents of existing ones.
+
+```{r}
+
+# mutating new variables
+example_1 <- data_amp_test_trials %>%
+  mutate(latency_plus_1 = rt_ms + 1)
+
+example_2 <- data_amp_test_trials %>%
+  mutate(log_latency = log(rt_ms))
+
+# mutating the contents of existing variables
+example_3 <- data_amp_test_trials %>%
+  mutate(rt_s = rt_ms / 1000) # latency is now in seconds rather than milliseconds
+
+```
+
+The operations inside mutate can range from the very simple, like the above, to much more complex. The below example uses other functions we haven't learned yet. For now, just notice that there can be multiple mutate calls and they can produce a cleaned up gender variable.
+
+```{r}
+
+# illustrate the problem with the gender responses:
+data_demographics_trimmed %>%
+  # filter only the gender item, not age
+  filter(item == "gender") %>%
+  count(response) %>%
+  arrange(desc(n))
+
+# clean up the gender variable
+data_demographics_gender_tidy_1 <- data_demographics_trimmed %>%
+  # filter only the gender item, not age
+  filter(item == "gender") %>%
+  # change the name of the response variable to what it now represents: gender
+  rename(gender = response) %>%
+  # change or remove weird responses to the gender question
+  mutate(gender = str_to_lower(gender)) %>%
+  mutate(gender = str_remove_all(gender, "[\\d.]")) %>% # remove everything except letters
+  mutate(gender = na_if(gender, "")) %>% 
+  mutate(gender = case_when(gender == "woman" ~ "female",
+                            gender == "man" ~ "male",
+                            gender == "girl" ~ "female",
+                            gender == "yes" ~ NA_character_,
+                            gender == "dude" ~ "male",
+                            gender == "non binary" ~ "non-binary",
+                            TRUE ~ gender)) %>%
+  # select only the columns of interest
+  select(unique_id, gender)
+
+# illustrate the data after cleaning:
+data_demographics_gender_tidy_1 %>%
+  count(gender) %>%
+  arrange(desc(n))
+
+```
+A single mutate call can contain multiple mutates. The code from the last chunk could be written more simply like this:
+
+```{r}
+
+# clean up the gender variable
+data_demographics_gender_tidy_2 <- data_demographics_trimmed %>%
+  # filter only the gender item, not age
+  filter(item == "gender") %>%
+  # change the name of the response variable to what it now represents: gender
+  rename(gender = response) %>%
+  # change or remove weird responses to the gender question
+  mutate(gender = str_to_lower(gender),
+         gender = str_remove_all(gender, "[\\d.]"), # remove everything except letters
+         gender = na_if(gender, ""), 
+         gender = case_when(gender == "woman" ~ "female",
+                            gender == "man" ~ "male",
+                            gender == "girl" ~ "female",
+                            gender == "yes" ~ NA_character_,
+                            gender == "dude" ~ "male",
+                            gender == "non binary" ~ "non-binary",
+                            TRUE ~ gender)) %>%
+  # select only the columns of interest
+  select(unique_id, gender)
+
+# check they are identical
+identical(data_demographics_gender_tidy_1, data_demographics_gender_tidy_2)
+
+```
+
+## Practice `mutate()`
+
+When analyzing cognitive behavioral tasks, it is common to employ mastery criteria to exclude participants who have not met or maintained some criterion within the task. We'll do the actual exclusions etc. later on, but for practice using `mutate()` by creating a new `fast_trial` column to indicate trials where the response was implausibly fast (e.g., < 100 ms).
+
+Try doing this with a simple logical test of whether latency < 100. You can do this with or without using the `ifelse()` function.
+
+```{r}
+
+data_amp_test_trials_with_fast_trials <- data_amp_test_trials %>%
+  mutate(fast_trial = ifelse(test = rt_ms < 100,
+                             yes = TRUE,
+                             no = FALSE))
+
+# more briefly but less explicitly
+data_amp_test_trials_with_fast_trials <- data_amp_test_trials %>%
+  mutate(fast_trial = rt_ms < 100)
+
+```
+
+## Practice `mutate()` & learn `ifelse()`
+
+Use `mutate()` to remove weird values from `data_demographics_trimmed$response`, for the rows referring to age, that aren't numbers.
+
+What function could you use to first determine what values are present in this column, to know which could be retained or changed?
+
+In simple cases like this, you can use `mutate()` and `ifelse()` to change impossible values to `NA`. 
+
+```{r}
+
+# what values are present?
+data_demographics_trimmed %>%
+  filter(item == "age") %>%
+  count(response) 
+
+# fix them with mutate
+data_demographics_age_tidy <- data_demographics_trimmed %>%
+  filter(item == "age") %>%
+  mutate(response = ifelse(test = response == "old",
+                           yes = NA_integer_,
+                           no = response)) %>%
+  mutate(response = as.numeric(response)) %>%
+  rename(age = response)
+
+# check this has fixed the issue
+data_demographics_age_tidy %>%
+  count(age)
+
+```
+
+## Practice `mutate()` & `ifelse()`
+
+Use `mutate()` to remove weird values from `data_selfreport_trials$response` that aren't Likert responses.
+
+First determine what values are present in this column.
+
+Use `ifelse()` and `%in%` inside `mutate()` to change values other than the Likert responses to `NA`.
+
+**If you struggle to do this: practice writing 'pseudocode' here. That is, without knowing the right code, explain in precise logic what you want the computer to do. This can be converted to R more easily.** 
+
+```{r}
+
+# what values are present?
+data_selfreport_trials %>%
+  count(response)
+
+# what type of data is the response column?
+class(data_selfreport_trials$response)
+
+# remove non Likert values
+data_selfreport_tidy <- data_selfreport_trials %>%
+  mutate(response = ifelse(response == "Ctrl+'B'", NA_integer_, response),
+         response = as.numeric(response))
+
+
+# show the data after changes
+data_selfreport_tidy %>%
+  count(response)
+
+class(data_selfreport_tidy$response)
+
+```
+
+What other ways are there of implementing this mutate, e.g., without using `%in%`? What are the pros and cons of each?
+
+```{r}
+
+# write examples here
+
+```
+
+## Practice `mutate()` & learn `case_when()`
+
+`case_when()` allows you to compare multiple logical tests or if-else tests.
+
+The AMP data needs to be reverse scored. Just like an item on a self-report that is worded negatively (e.g., most items: I am a good person; some items: I am a bad person), the negative prime trials have the opposite 'accuracy' values that they should. Use `mutate()` and `case_when()` to reverse score the negative prime trials, so that what was 0 is now 1 and what was 1 is now 0.
+
+```{r}
+
+# in your own time later, see if you can rewrite this yourself without looking at the answer to practice using case_when
+data_amp_tidy <- data_amp_test_trials_with_fast_trials %>%
+  mutate(correct = case_when(trial_type == "prime_positive" ~ correct,
+                             trial_type == "prime_negative" & correct == 0 ~ 1,
+                             trial_type == "prime_negative" & correct == 1 ~ 0))
+
+# you can also specify a default value to return if none of the logical tests are passed with 'TRUE ~':
+data_amp_tidy <- data_amp_test_trials_with_fast_trials %>%
+  mutate(correct = case_when(trial_type == "prime_negative" & correct == 0 ~ 1,
+                             trial_type == "prime_negative" & correct == 1 ~ 0,
+                             TRUE ~ correct))
+
+```
+
+# Mini-lesson: `round()` probably doesn't do what you think
+
+Did you know that R doesn't use the rounding method most of us are taught in school, where .5 is rounded up to the next integer? Instead it uses "banker's rounding", which is better when you round a very large number of numbers, but worse for reporting the results of specific analyses. 
+
+This is easier to show than explain. What do you expect the output of the below chunk to be? And what is the actual output?
+
+```{r}
+
+round(0.5)
+round(1.5)
+round(2.5)
+round(3.5)
+round(4.5)
+round(5.5)
+
+```
+
+Remember: you probably need to use `janitor::round_half_up()` in most of your R scripts
+
+```{r}
+
+janitor::round_half_up(0.5)
+round_half_up(1.5)
+round_half_up(2.5)
+round_half_up(3.5)
+round_half_up(4.5)
+round_half_up(5.5)
+
+```
+
+# Summarizing across rows
+
+It is very common that we need to create summaries across rows. For example, to create the mean and standard deviation of a column like age. This can be done with `summarize()`. Remember: `mutate()` creates new columns or modifies the contents of existing columns, but does not change the number of rows. Whereas `summarize()` reduces a data frame down to one row.
+
+```{r}
+
+# mean
+data_demographics_age_tidy %>%
+  summarize(mean_age = mean(age, na.rm = TRUE))
+
+# SD
+data_demographics_age_tidy %>%
+  summarize(sd_age = sd(age, na.rm = TRUE))
+
+# mean and SD with rounding, illustrating how multiple summarizes can be done in one function call
+data_demographics_age_tidy %>%
+  summarize(mean_age = mean(age, na.rm = TRUE),
+            sd_age = sd(age, na.rm = TRUE)) |>
+  mutate(mean_age = round_half_up(mean_age, digits = 2),
+         sd_age = round_half_up(sd_age, digits = 2))
+
+```
+
+## `group_by()`
+
+Often, we don't want to reduce a data frame down to a single row / summarize the whole dataset, but instead we want to create a summary for each (sub)group. For example
+
+```{r}
+
+# # this code creates data needed for this example - you can simply load the data from disk and skip over this commented-out code. we will come back to things like 'joins' later
+# data_demographics_unique_participant_codes <- data_demographics_trimmed %>%
+#   count(unique_id) %>%
+#   filter(n == 2)
+# 
+# data_demographics_age_gender_tidy <- data_demographics_trimmed %>%
+#   semi_join(data_demographics_unique_participant_codes, by = "unique_id") %>%
+#   pivot_wider(names_from = "item",
+#               values_from = "response") %>%
+#   mutate(age = ifelse(age == "old", NA, age),
+#          age = as.numeric(age),
+#          gender = tolower(gender),
+#          gender = stringr::str_remove_all(gender, regex("\\W+")), # regex is both very useful and awful to write
+#          gender = case_when(gender == "female" ~ gender,
+#                             gender == "male" ~ gender,
+#                             gender == "nonbinary" ~ gender,
+#                             gender == "woman" ~ "female",
+#                             gender == "man" ~ "male"))
+# 
+# dir.create("../data/processed")
+# write_csv(data_demographics_age_gender_tidy, "../data/processed/data_demographics_age_gender_tidy.csv")
+
+# load suitable example data from disk
+data_demographics_age_gender_tidy <-
+  read_csv("../data/processed/data_demographics_age_gender_tidy.csv")
+
+
+# illustrate use of group_by() and summarize()
+data_demographics_age_gender_tidy %>%
+  summarize(mean_age = mean(age, na.rm = TRUE))
+
+data_demographics_age_gender_tidy %>%
+  group_by(gender) %>%
+  summarize(mean_age = mean(age, na.rm = TRUE))
+
+```
+
+## `n()`
+
+`n()` calculates the number of rows, i.e., the N. It can be useful in summarize.
+
+```{r}
+
+# summarize n
+data_demographics_age_gender_tidy %>%
+  summarize(n_age = n())
+
+# summarize n per gender group
+data_demographics_age_gender_tidy %>%
+  group_by(gender) %>%
+  summarize(n_age = n())
+
+```
+
+Note that `count()` is just the combination of group_by() and summiarize() and n()! they produce the same results as above.
+
+```{r}
+
+# summarize n
+data_demographics_age_gender_tidy %>%
+  count()
+
+# summarize n per gender group
+data_demographics_age_gender_tidy %>%
+  count(gender)
+
+```
+
+## More complex summarizations
+
+Like mutate, the operation you do to summarize can also be more complex, such as finding the mean result of a logical test to calculate a proportion. For example, the proportion of participants who are less than 25 years old: 
+
+```{r}
+
+data_demographics_age_tidy %>%
+  summarize(proportion_less_than_25 = mean(age < 25, na.rm = TRUE)) %>%
+  mutate(percent_less_than_25 = round_half_up(proportion_less_than_25 * 100, 1))
+
+```
+
+You can also summarize (or indeed mutate) multiple columns in the same way using `across()`, for do-this-across-columns. We won't cover how to use this here or all the variations that are possible, just know that it can be done. For example:
+
+```{r}
+
+# using the mtcars dataset that is built in to {dplyr}, ... 
+mtcars %>%
+  # ... calculate the mean of every numeric column in the dataset ...
+  summarise(across(where(is.numeric), mean, na.rm = TRUE)) %>%
+  # ... and then round every column to one decimal place
+  mutate(across(everything(), round_half_up, digits = 1))
+
+```
+
+## Realise that `count()` is just a wrapper function for `summarize()`
+
+```{r}
+
+dat <- data.frame(x = c(
+  rnorm(n = 50),
+  rep(NA_integer_, 10)
+))
+
+dat |>
+  mutate(x_is_na = is.na(x)) |>
+  count(x_is_na)
+
+dat |>
+  summarise(n_na = sum(is.na(x)))
+
+```
+
+## Practice using `summarize()`
+
+Calculate the min, max, mean, and SD of all responses on the self report data.
+
+```{r}
+
+data_selfreport_tidy %>%
+  summarize(mean = mean(response, na.rm = TRUE),
+            sd = sd(response, na.rm = TRUE),
+            min = min(response, na.rm = TRUE),
+            max = max(response, na.rm = TRUE))
+
+```
+
+Currently each participant has up to three responses on the self-report scales (three item scale: like, positive, and prefer). Create a new dataframe containing each unique_id's mean score across the items. Also calculate how many items each participant has data for, and whether they have complete data (i.e., data for three items).
+
+```{r}
+
+data_selfreport_scored <- data_selfreport_tidy %>%
+  group_by(unique_id) %>%
+  summarize(mean_self_report = mean(response),
+            n_self_report_items = n()) %>%
+  mutate(self_report_complete = n_self_report_items == 3)
+
+
+test <- c(3, 5, 7, NA)
+#test <- c(3, 5, 7)
+mean(test)
+mean(test, na.rm = TRUE)
+
+dat |>
+  summarize(mean = mean(response, na.rm = TRUE))
+
+dat |>
+  filter(!is.na(response)) |>
+  summarize(mean = mean(response))
+
+mean_not_dumb <- function(x){mean(x, na.rm = TRUE)}
+  
+```
+
+Using only participants with complete, calculate the mean and SD of all participant's mean scores on the self-reports.
+
+```{r}
+
+# data_selfreport_scored %>%
+
+```
+
+Create a new data frame that calculates the proportion of prime-congruent trials for each participant on the AMP (i.e., the mean of the 'correct' column), their proportion of too-fast trials, and their number of trials.
+
+Also add to that data frame a new column called "exclude_amp" and set it to "exclude" if more than 10% of a participant's trials are too-fast trials and "include" if not.
+
+```{r}
+
+# data_amp_scored <- data_amp_tidy %>%
+
+```
+
+Calculate the proportion of participants who are to be excluded.
+
+```{r}
+
+# data_amp_scored %>%
+
+```
+
+# Check your learning
+
+What is the difference between `mutate()` and `summarize()`? If I use the wrong one, will I get the same answer? E.g., mutate(mean_age = mean(age, na.rm = TRUE)) vs. summarize(mean_age = mean(age, na.rm = TRUE))
+
+# Joining data frames
+
+These three data frames are now one-participant-per-row, i.e., wide format data.
+
+To have a single data set to analyze, we need to combine them into one data frame. We can use `_join` family functions to do this, such as `full_join()`.
+
+Joins can be tricky - there is also an entire separate lesson on them.
+
+```{r}
+
+# use full_join() to join these:
+
+# data_demographics_age_gender_tidy
+# data_selfreport_scored
+# data_amp_scored
+
+```
+
+# Nicer tables using kable() and kable_classic()
+
+Nicer tables can be printed using many different packages. I tend to use the combination of `knitr::kable()` and `kableExtra::kable_classic()`. Whenever I print a plot below a chunk, I use these. I have not used them in this R Markdown file until now just to keep the code simpler.
+
+```{r}
+
+example_table <- data_demographics_age_gender_tidy %>%
+  # calculate M, SD and N for each gender category
+  group_by(gender) %>%
+  summarize(mean_age = mean(age, na.rm = TRUE),
+            mean_age = round_half_up(mean_age, digits = 2),
+            sd_age = mean(age, na.rm = TRUE),
+            sd_age = round_half_up(sd_age, digits = 2),
+            n = n()) 
+
+# print normally
+example_table
+
+# print with kable + kable_classic
+example_table %>%
+  # print nicer table
+  kable(allign = "r") %>%
+  kable_classic(full_width = FALSE)
+
+```
+
+# Writing data to disk
+
+```{r}
+
+write_csv(data_processed, "../data/processed/data_processed.csv")
+
+```
+
+# Session info
+
+You can help make your code and results more reproducible by including a `sessionInfo()` call at the end of your scripts. This prints details of your operating system, R version, and packages that were used in your script. When you click knit to create a 
+
+```{r}
+
+sessionInfo()
+
+```
+
+

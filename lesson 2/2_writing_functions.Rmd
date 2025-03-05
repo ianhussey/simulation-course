@@ -16,6 +16,16 @@ output:
 
 Two of the key steps in a simulation study (generate data and analyze data) require us to know how to write functions. This R Markdown lesson practices this.
 
+# Citation & License
+
+Citation: 
+
+Ian Hussey (2024) Improving your statistical inferences through simulation studies in R. https://github.com/ianhussey/simulation-course
+
+License: 
+
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.en)
+
 ```{r, include=FALSE}
 
 # set default chunk options
@@ -27,13 +37,16 @@ options(scipen = 999)
 
 ```
 
+# Dependencies
+
 ```{r}
 
-# dependencies
 library(dplyr)
 library(tibble)
 library(forcats)
 library(report)
+library(janitor)
+library(faux)
 
 ```
 
@@ -96,14 +109,12 @@ round(5.5)
 
 ```{r}
 
-library(janitor)
-
-round_half_up(0.5)
-round_half_up(1.5)
-round_half_up(2.5)
-round_half_up(3.5)
-round_half_up(4.5)
-round_half_up(5.5)
+janitor::round_half_up(0.5)
+janitor::round_half_up(1.5)
+janitor::round_half_up(2.5)
+janitor::round_half_up(3.5)
+janitor::round_half_up(4.5)
+janitor::round_half_up(5.5)
 
 ```
 
@@ -145,7 +156,7 @@ function_name <- function(argument_1, # first argument is often the data, if the
 
 ```{r}
 
-# use this data to build and test your function
+# data to be analyzed using the analysis function
 data_simulated_intervention <- 
   tibble(condition = "intervention", 
          score = rnorm(n = 50, mean = 0, sd = 1))
@@ -176,6 +187,14 @@ t_test_p_value(data_simulated)
 
 ```
 
+How would I build this from scratch? What's the first thing I would type?
+
+```{r}
+
+
+
+```
+
 ## General things to remember when writing functions
 
 - If you can't immediately write the code, write pseudo-code first! 
@@ -185,265 +204,178 @@ t_test_p_value(data_simulated)
 - Check that your function actually works as you expect, not just that it runs. Give it lots of different input values that should and should not work, and check you get the correct outputs.
 - Don't try to abstract more than you need. One function should do one thing. Elaborate the function only as needed.
 
-# Practice writing functions
+# In-class and at-home exercise: Practice writing functions
 
-## Calculate mean dropping NAs
+Write functions below that can be applied to the following data sets, i.e., use these data sets to guide how you write the functions and test that they work.
 
-```{r}
+Try and use chatGPT as little as possible. 
 
-
-
-```
-
-## Calculate SD dropping NAs
+If your existing knowledge of data processing/wrangling with {tidyverse}/{dplyr}/{tidyr} isn't good, start with 
 
 ```{r}
 
+set.seed(42)
 
+# data for t tests
+data_intervention <- 
+  tibble(condition = "intervention", 
+         score = rnorm(n = 50, mean = 0, sd = 1))
 
-```
+data_control <- 
+  tibble(condition = "control", 
+         score = rnorm(n = 50, mean = 0, sd = 1))
 
-## Calculate mean for each condition dropping NAs
-
-```{r}
-
-
-
-```
-
-## Calculate mean and SD for each condition dropping NAs
-
-```{r}
-
-
-
-```
-
-## Calculate mean and SD for each condition dropping NAs, then use them to calculate Cohen's d
-
-```{r}
-
-
-
-```
-
-## p value from correlation test
-
-Goal: Fit a correlation test using cor.test() and extract the p value and correlation
-
-```{r}
-
-# use this data to build and test your function
-data_simulated <- tibble(Y = rnorm(n = 100, mean = 0, sd = 1),
-                         X = rnorm(n = 100, mean = 0, sd = 1))
-
-
-cor_extraction <- function(data){
-  
-  # do stuff
-  
-  return(res)
-}
-
-cor_extraction(data_simulated)
-
-```
-
-## Pearson's r from correlation test
-
-Goal: Fit a correlation test using cor.test() and extract the p value and correlation
-
-```{r}
-
-# use this data to build and test your function
-data_simulated <- tibble(Y = rnorm(n = 100, mean = 0, sd = 1),
-                         X = rnorm(n = 100, mean = 0, sd = 1))
-
-
-cor_extraction <- function(data){
-  
-  # do stuff
-  
-  return(res)
-}
-
-cor_extraction(data_simulated)
-
-```
-
-## Pearson's r and its p value from correlation test
-
-Goal: Fit a correlation test using cor.test() and extract the p value and correlation
-
-```{r}
-
-# use this data to build and test your function
-data_simulated <- tibble(Y = rnorm(n = 100, mean = 0, sd = 1),
-                         X = rnorm(n = 100, mean = 0, sd = 1))
-
-
-cor_extraction <- function(data){
-  
-  # do stuff
-  
-  return(res)
-}
-
-cor_extraction(data_simulated)
-
-```
-
-## Cohen's d and its confidence intervals 
-
-Goal: Calculate cohen's d using effsize::cohen.d() and return the estimate and its p values as a data frame.
-
-```{r}
-
-# use this data to build and test your function
-data_simulated_intervention <- tibble(condition = "intervention", 
-                                      score = rnorm(n = 50, mean = 0, sd = 1))
-
-data_simulated_control <- tibble(condition = "control", 
-                                 score = rnorm(n = 50, mean = 0, sd = 1))
-
-data_simulated <- 
-  bind_rows(data_simulated_intervention,
-            data_simulated_control) |>
+data_combined_ttest <- 
+  bind_rows(data_intervention,
+            data_control) |>
   # control's factor levels must be ordered so that intervention is the first level and control is the second
-  # this ensures that positive cohen's d values refer to intervention > control and not the other way around.
+  # this ensures that positive Cohen's d values refer to intervention > control and not the other way around.
   mutate(condition = fct_relevel(condition, "intervention", "control"))
 
 
-
-extract_d <- function(data){
-  
-  # do stuff
-  
-  return(res)
-}
-
-extract_d(data_simulated)
+# data for correlations
+data_correlation <- rnorm_multi(n = 100, 
+                                vars = 2, 
+                                mu = 0, 
+                                sd = 1, 
+                                r = 0.5, 
+                                varnames = c("X", "Y"))
 
 ```
 
-## t-test's p value, Cohen's d and its confidence intervals
+## Calculate mean
+
+- Use `dplyr::summarize()`.
+- Use the data_intervention data set.
+- Return results in a data frame.
 
 ```{r}
 
-# use this data to build and test your function
-data_simulated_intervention <- tibble(condition = "intervention", 
-                                      score = rnorm(n = 50, mean = 0, sd = 1))
 
-data_simulated_control <- tibble(condition = "control", 
-                                 score = rnorm(n = 50, mean = 0, sd = 1))
 
-data_simulated <- 
-  bind_rows(data_simulated_intervention,
-            data_simulated_control) |>
-  # control's factor levels must be ordered so that intervention is the first level and control is the second
-  # this ensures that positive cohen's d values refer to intervention > control and not the other way around.
-  mutate(condition = fct_relevel(condition, "intervention", "control"))
+```
+
+## Calculate SD
+
+- Use `dplyr::summarize()`.
+- Use the data_intervention data set.
+- Return results in a data frame.
+
+```{r}
 
 
 
-analyze_data <- function(data) {
-  
-  # do stuff
-  
-  return(res)
-}
+```
+
+## Calculate mean for each condition 
+
+- Use `dplyr::summarize()` and `group_by()`.
+- Use the data_combined_ttest data set.
+- Return results in a data frame.
+
+```{r}
+
+
+
+```
+
+## Calculate mean and SD for each condition 
+
+- Use `dplyr::summarize()` and `group_by()`.
+- Use the data_combined_ttest data set.
+- Return results in a data frame.
+
+```{r}
+
+
+
+```
+
+## Cohen's *d* and its 95% Confidence Intervals 
+
+- Calculate Cohen's *d* using `effsize::cohen.d()` and extract the Cohen's *d* estimate. 
+- Use the data_combined_ttest data set.
+- Return results in a data frame.
+
+```{r}
+
+
+
+```
+
+## *t*-test's *p*-value, Cohen's *d* and its 95% Confidence Intervals
+
+- Calculate Cohen's *d* using `effsize::cohen.d()` and extract the estimate. 
+- Also fit a Student's *t*-test and extract its *p* value. 
+- Use the data_combined_ttest data set.
+- Return results (*d* and *p*) in a data frame.
+
+```{r}
+
+
+
+```
+
+## Pearson's *r* from correlation test
+
+- Fit a correlation test using `cor.test()` and extract the correlation estimate.
+- Use the data_correlation data set.
+- Return results in a data frame.
+
+```{r}
+
+
+
+```
+
+## *p*-value from correlation test
+
+- Fit a correlation test using `cor.test()` and extract the *p* value.
+- Use the data_correlation data set.
+- Return results in a data frame.
+
+```{r}
+
+
+
+```
+
+## Pearson's *r* and its *p*-value from `cor.test()`
+
+- Fit a correlation test using `cor.test()` and extract the *p* value and correlation.
+- Use the data_correlation data set.
+- Return results in a data frame.
+
+```{r}
+
+
 
 ```
 
 ## Generate data for a between groups design
 
-Goal: rather than writing a data analysis function, this time write a data generation function. In the previous chunks we've used this code to generate a single data set with intervention and control conditions and simulated normally distributed data. Rewrite this as a function so that we can generate such a data set with one line of code using the new function `generate_data()`. Unlike your previous functions, this one has no inputs, i.e., you can write `function() <- `.
+Rather than writing a data analysis function, this time write a data generation function. In the previous chunks we've used this code to generate a single data set with intervention and control conditions and simulated normally distributed data. Rewrite this as a function so that we can generate such a data set with one line of code using the new function `generate_data()`. Unlike your previous functions, this one has no inputs, i.e., you can write `function() <- `.
 
 ```{r}
 
-# use this *code* to build your data generation function
-data_simulated_intervention <- tibble(condition = "intervention", 
-                                      score = rnorm(n = 50, mean = 0, sd = 1))
-
-data_simulated_control <- tibble(condition = "control", 
-                                 score = rnorm(n = 50, mean = 0, sd = 1))
-
-data_simulated <- 
-  bind_rows(data_simulated_intervention,
-            data_simulated_control) |>
-  # control's factor levels must be ordered so that intervention is the first level and control is the second
-  # this ensures that positive cohen's d values refer to intervention > control and not the other way around.
-  mutate(condition = fct_relevel(condition, "intervention", "control"))
-
-
-
-
-generate_data <- function(){
-  
-  # do stuff
-  
-  return(data_simulated)
-}
-
-generate_data() |>
-  analyze_data()
+# # code to convert into a function
+# data_simulated_intervention <- tibble(condition = "intervention", 
+#                                       score = rnorm(n = 50, mean = 0, sd = 1))
+# 
+# data_simulated_control <- tibble(condition = "control", 
+#                                  score = rnorm(n = 50, mean = 0, sd = 1))
+# 
+# data_simulated <- 
+#   bind_rows(data_simulated_intervention,
+#             data_simulated_control) 
 
 ```
 
-## Create a more flexible data generation function 
+# Further reading
 
-Goal: What if we want to generate data with a different number of participants per condition? We can make the value of `n` a variable rather than a hard-coded value and add this to functions inputs/arguments.
+Although we have practiced writing custom functions to extract statistical results / model parameters, it is worth knowing that the {easystats} family of packages includes [{parameters}](https://easystats.github.io/parameters/) package, which does a very good job of extracting model parameters from a very wide range of models including base R functions, {lavaan}, {psych}, and other packages. If you want to extract values from a model, consider using {parameters} to do a lot of the work for you when writing your function.
 
-```{r}
-
-generate_data <- function(n_per_group){
-  
-  # do stuff
-  
-  return(data_simulated)
-}
-
-bind_rows(
-  generate_data(n_per_group = 50) |>
-    analyze_data(),
-  generate_data(n_per_group = 100) |>
-    analyze_data(),
-  generate_data(n_per_group = 150) |>
-    analyze_data(),
-  generate_data(n_per_group = 200) |>
-    analyze_data(),
-  generate_data(n_per_group = 250) |>
-    analyze_data(),
-) |>
-  mutate(ci_width = cohens_d_ci_upper - cohens_d_ci_lower) |>
-  select(ci_width)
-
-```
-
-## Create an even more flexible data generation function 
-
-Goal: Rewrite the data generation function to make it even more flexible: make all Ns, Ms, and SDs variables that are set by the inputs.
-
-```{r}
-
-generate_data <- function(n_intervention, n_control = NA, m_intervention = 0, m_control = 0, sd_intervention = 1, sd_control = 1){
-  
-  # do stuff
-  
-  return(data_simulated)
-}
-
-generate_data(n_intervention = 25, 
-              n_control = 25, 
-              m_intervention = .5)
-
-```
-
-# Notes
-
-Although we have practiced writing custom functions to extract statistical results / model parameters, it is worth knowing that the easystats family of packages includes [{parameters}](https://easystats.github.io/parameters/) package, which does a very good job of extracting model parameters from a very wide range of models including base R functions, lavaan, psych, and other packages. If you want to extract values from a model, consider using {parameters} to do a lot of the work for you when writing your function.
-
-Seperately, the [{report}](https://easystats.github.io/report/) package will fully report the results of many common analyses for you. e.g.:
+Separately, the [{report}](https://easystats.github.io/report/) package will fully report the results of many common analyses for you. e.g.:
 
 ```{r}
 

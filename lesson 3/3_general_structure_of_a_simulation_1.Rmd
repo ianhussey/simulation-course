@@ -1,0 +1,422 @@
+---
+title: "General structure of a simulation study"
+subtitle: "Part 1: Generate data and analyze"
+author: "Ian Hussey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_download: true
+    code_folding: show
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+# Overview of tutorial
+
+This tutorial teaches you about the essential components of a simulation study and the general steps involved in actually writing one. This lesson covers the steps of writing functions to generate data and analyze that data within the workflow that we will use throughout this course.
+
+# Citation & License
+
+Citation: 
+
+Ian Hussey (2024) Improving your statistical inferences through simulation studies in R. https://github.com/ianhussey/simulation-course
+
+License: 
+
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.en)
+
+```{r, include=FALSE}
+
+# set default chunk options
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+
+# disable scientific notation
+options(scipen = 999) 
+
+```
+
+# Essential components & general steps 
+
+The essential *components* of a simulation are:
+
+1. Generate pseudo-random data set with known properties
+2. Analyse data with a statistical method
+3. Repeat 1 & 2 many times (‘iterations’)
+4. Collect and aggregate results across iterations
+5. Make it an experiment: Systematically vary parameters in Step 1 (between factor) and/or compare different ways to do Step 2 (within factor)
+
+However, the way you *build* a simulation is much more iterative than this final product. Each component must be both built and inspected by itself, and then checked to make sure that the components work together in the correct manner, like a fine Swiss watch. 
+
+The general steps for actually building one involve:
+
+1. Generate a *single* pseudo-random data set with known properties, using hard-coded variables
+2. Analyse this *single* data set with a statistical method, using hard-coded variables
+3. Convert the data generation code to a function, making it as abstract as necessary  [Component 1]
+4. Convert the data analysis code to a function, making it as abstract as necessary  [Component 2]
+5. Ensure that experiment parameters, data generation function, and data analysis code play together nicely (i.e., can pass values between one another in a workflow, and save values appropriately [Component 4]). Do this using a small number of parameters and just one or two iterations.
+6. Increase the number of iterations and parameters and actually run the simulation as a whole [Component 4 and 5]
+7. Check the assumptions of the simulation have been adequately met
+8. Interpret the results of the simulation
+
+This tutorial focuses on the general practical steps, but always keep the essential components in mind as the guiding principles of why we're doing something.
+
+# Dependencies
+
+```{r}
+
+library(tidyr)
+library(dplyr)
+library(forcats)
+library(readr)
+library(purrr) 
+library(ggplot2)
+
+```
+
+# Generate data and apply and analysis *once* using hard coded arguments
+
+## Generate some data for an independent t-test
+
+- condition: factor with two levels (control, intervention)
+- score: numeric of normally distributed data (within each condition), with different means, and SD = 1.
+- given that cohen's d = (m2 - m1)/SD_pooled, simply setting SDs to 1 and mean_control to 0 lets us control the cohen's d = mean_intervention
+- use the R function `rnorm`
+
+To sample data from a normally distributed population, we use the pseudo-random number generator for normal data built into R: `rnorm()`. Note that many packages exist to help you generate different types of data more easily, including {MASS}, {faux}, {simstudy}, and {lavaan}. These can be very helpful, but here we'll do it manually for the moment.
+
+### Try it yourself first
+
+For each 'try it yourself first' exercise in this lesson, work with the person next to you to try to write the code from scratch. Don't look at the solution below until you're done. 
+
+The point is to practice not just receptive language (understanding my code, or chatGPT's code) but to practice productive language yourself. After you make an attempt yourself, we'll work as a group to do it together.
+
+```{r eval=FALSE, include=FALSE}
+
+
+```
+
+### Solution
+
+```{r}
+
+data_control <- 
+  tibble(condition = "control",
+         score = rnorm(n = 50, mean = 0, sd = 1))
+
+data_intervention <- 
+  tibble(condition = "intervention",
+         score = rnorm(n = 50, mean = 0.50, sd = 1))
+
+data_combined <- bind_rows(data_control,
+                           data_intervention)
+
+View(data_combined)
+
+```
+
+Note that the above code is equivalent to the below. The above is easier to start with when you're learning, the below is faster to write when you're experienced.
+
+```{r}
+
+data_combined <- bind_rows(
+  tibble(condition = "control",
+         score = rnorm(n = 50, mean = 0, sd = 1)),
+  tibble(condition = "intervention",
+         score = rnorm(n = 50, mean = 0.50, sd = 1))
+)
+
+```
+
+## Fit a Student's independent *t*-test
+
+To the data we just generated.
+
+Use `t.test()`
+
+### Try it yourself
+
+```{r eval=FALSE, include=FALSE}
+
+
+
+```
+
+### Solution
+
+```{r}
+
+t.test(formula = score ~ condition, 
+       data = data_combined,
+       var.equal = TRUE,
+       alternative = "two.sided")
+
+```
+
+# Create a data generating function
+
+## Make the existing code more abstract
+
+Move the values used as parameters in the `rnorm()` call to variables.
+
+### Try it yourself
+
+```{r eval=FALSE, include=FALSE}
+
+
+
+```
+
+### Solution
+
+```{r}
+
+n_per_condition <- 50
+mean_control <- 0
+mean_intervention <- 0.5
+sd <- 1
+
+data_control <- 
+  tibble(condition = "control",
+         score = rnorm(n = n_per_condition, mean = mean_control, sd = sd))
+
+data_intervention <- 
+  tibble(condition = "intervention",
+         score = rnorm(n = n_per_condition, mean = mean_intervention, sd = sd))
+
+data_combined <- bind_rows(data_control,
+                           data_intervention)
+
+# view the generated data
+View(data_combined)
+
+```
+
+## Convert this to a function
+
+Abstracting code into functions is a learned skill. For the moment, see if you can follow the logic of the function and where it came from in the hard coded original version. 
+
+### Try it yourself
+
+```{r eval=FALSE, include=FALSE}
+
+n_per_condition <- 50
+mean_control <- 0
+mean_intervention <- 0.5
+sd <- 1
+
+data_control <- 
+  tibble(condition = "control",
+         score = rnorm(n = n_per_condition, mean = mean_control, sd = sd))
+
+data_intervention <- 
+  tibble(condition = "intervention",
+         score = rnorm(n = n_per_condition, mean = mean_intervention, sd = sd))
+
+data_combined <- bind_rows(data_control,
+                           data_intervention)
+
+```
+
+### Solution
+
+```{r}
+
+# define function
+generate_data <- function(n_per_condition, # the parameters are now function arguments
+                          mean_control,
+                          mean_intervention,
+                          sd) {
+  
+  data_control <- 
+    tibble(condition = "control",
+           score = rnorm(n = n_per_condition, mean = mean_control, sd = sd))
+  
+  data_intervention <- 
+    tibble(condition = "intervention",
+           score = rnorm(n = n_per_condition, mean = mean_intervention, sd = sd))
+  
+  data_combined <- bind_rows(data_control,
+                             data_intervention)
+  
+  return(data_combined)
+}
+
+# call the function with example arguments
+generated_data <- generate_data(n_per_condition = 50,
+                                mean_control = 0,
+                                mean_intervention = 0.5,
+                                sd = 1)
+
+# view the generated data
+View(generated_data)
+
+```
+
+- Now change the above function to use default values for SDs, with SDs = 1. Check that the function works even when you don't specify SDs when calling the function.
+
+## Check the generated data still works with the *t*-test
+
+In general, you should inspect the data thoroughly, check the data types, plot it, conduct other sanity checks, etc. For the moment, we apply just the most basic test: check that the analysis can be fit to data generated by the data generation function. For the moment, the specific results don't matter as much as whether it can accept the data. That is, your data generation will have to be aligned with your data analysis code (e.g., both make use of the variables score [continuous] and condition [factor with two levels]).
+
+```{r}
+
+t.test(formula = score ~ condition, 
+       data = generated_data, # using the data generated in the previous chunk
+       var.equal = TRUE,
+       alternative = "two.sided")
+
+```
+
+# Create a data analysis function
+
+## Make the existing code more abstract
+
+Now do the same abstraction for the analysis.
+
+Rather than just printing all the results of the t test to the console, extract the p value specifically as a column in a tibble. In general, you usually want to extract the results of analyses in `tidy data` format. Note that the {parameters} and {broom} packages can be very helpful for doing this for you for many common types of analysis, but here we're do it manually.
+
+### Try it yourself
+
+```{r eval=FALSE, include=FALSE}
+
+t.test(formula = score ~ condition, 
+       data = generated_data, 
+       var.equal = TRUE,
+       alternative = "two.sided")
+
+```
+
+### Solution
+
+```{r}
+
+res_t_test <- t.test(formula = score ~ condition, 
+                     data = generated_data,
+                     var.equal = TRUE,
+                     alternative = "two.sided")
+
+res <- tibble(p = res_t_test$p.value)
+
+res
+
+```
+
+## Convert this to a function
+
+### Try it yourself
+
+```{r eval=FALSE, include=FALSE}
+
+res_t_test <- t.test(formula = score ~ condition, 
+                     data = generated_data,
+                     var.equal = TRUE,
+                     alternative = "two.sided")
+
+res <- tibble(p = res_t_test$p.value)
+
+res
+
+```
+
+### Solution
+
+```{r}
+
+analyze <- function(data) {
+  
+  res_t_test <- t.test(formula = score ~ condition, 
+                       data = data,
+                       var.equal = TRUE,
+                       alternative = "two.sided")
+  
+  res <- tibble(p = res_t_test$p.value)
+  
+  return(res)
+}
+
+```
+
+- Now modify the function to also extract the t values and degrees of freedom.
+
+# Compare original hard-coded version with functionalised version
+
+## Original manual code, copied from above
+
+```{r}
+
+set.seed(42)
+
+data_control <- 
+  tibble(condition = "control",
+         score = rnorm(n = 50, mean = 0, sd = 1))
+
+data_intervention <- 
+  tibble(condition = "intervention",
+         score = rnorm(n = 50, mean = 0.5, sd = 1))
+
+data_combined <- bind_rows(data_control,
+                           data_intervention)
+
+t.test(formula = score ~ condition, 
+       data = data_combined,
+       var.equal = TRUE,
+       alternative = "two.sided")
+
+```
+
+## New code using functions, copied from above
+
+```{r}
+
+set.seed(42)
+
+generated_data <- generate_data(n_per_condition = 50,
+                                mean_control = 0,
+                                mean_intervention = 0.5,
+                                sd = 1)
+
+results <- analyze(generated_data)
+
+results
+
+```
+
+Note that this can also be done using the pipe:
+
+```{r}
+
+set.seed(42)
+
+results <- 
+  generate_data(n_per_condition = 50,
+                mean_control = 0,
+                mean_intervention = 0.5,
+                sd = 1) |>
+  analyze()
+
+results
+
+```
+
+# To do at home this week
+
+Read:
+
+- Siepe et al. (2024) Simulation Studies for Methodological Research in Psychology: A Standardized Template for Planning, Preregistration, and Reporting. Psychological Methods. https://doi.org/10.1037/met0000695
+
+Optional book-length extra reading you could do over the next several weeks if you choose. However, bear in mind that they employ different simulation workflows than we do.
+
+- Pustejovsky & Miratrix (2023) Designing Monte Carlo Simulations in R. https://jepusto.github.io/Designing-Simulations-in-R/
+
+# Session info
+
+```{r}
+
+sessionInfo()
+
+```
+
+

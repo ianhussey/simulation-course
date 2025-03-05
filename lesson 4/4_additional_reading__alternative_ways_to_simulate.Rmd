@@ -1,0 +1,222 @@
+---
+title: "General structure of a simulation study"
+subtitle: "Why not use for loops? Why bother with pmap and nested data?"
+author: "Ian Hussey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_download: true
+    code_folding: show
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+# Overview of tutorial
+
+This lesson provides additional material that presents a for-loop approach to simulation. Hopefully it demonstrates why for-loop approaches are harder to understand and write than the more flexible pmap and nested data approach.
+
+# Citation & License
+
+Citation: 
+
+Ian Hussey (2024) Improving your statistical inferences through simulation studies in R. https://github.com/ianhussey/simulation-course
+
+License: 
+
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.en)
+
+```{r, include=FALSE}
+
+# set default chunk options
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+
+# disable scientific notation
+options(scipen = 999) 
+
+```
+
+# Dependencies
+
+```{r}
+
+library(tidyr)
+library(dplyr)
+library(forcats)
+library(readr)
+library(purrr) 
+library(ggplot2)
+library(scales)
+
+```
+
+# Generate data and analyze functions from last lesson
+
+```{r}
+
+generate_data <- function(n_control, # the parameters are now function arguments
+                          n_intervention,
+                          mean_control,
+                          mean_intervention,
+                          sd_control,
+                          sd_intervention) {
+  
+  data <- 
+    bind_rows(
+      tibble(condition = "control",
+             score = rnorm(n = n_control, mean = mean_control, sd = sd_control)),
+      tibble(condition = "intervention",
+             score = rnorm(n = n_intervention, mean = mean_intervention, sd = sd_intervention))
+    ) 
+  
+  return(data)
+}
+
+
+analyze <- function(data) {
+
+  res_t_test <- t.test(formula = score ~ condition, 
+                       data = data,
+                       var.equal = TRUE,
+                       alternative = "two.sided")
+  
+  res <- tibble(p = res_t_test$p.value)
+  
+  return(res)
+}
+
+```
+
+# Simulation via for loop
+
+```{r}
+
+set.seed(42)
+
+# define the number of iterations
+iterations <- 100
+
+# declare a vector to store each iteration's results in
+p_values <- numeric(iterations)
+
+# use for loop to repeat its content many times
+# for the 'i'-th element of the series 1 to `iterations` (i.e., 1, 2, 3, ... iterations), run the following code:
+for(i in 1:iterations){ 
+  # generate data
+  generated_data <- generate_data(n_control = 50,
+                                  n_intervention = 50,
+                                  mean_control = 0,
+                                  mean_intervention = 0.5,
+                                  sd_control = 1,
+                                  sd_intervention = 1)
+  
+  # analyse data
+  results <- analyze(generated_data)
+  
+  # store result of this iteration
+  # the i-th element of the iterations vector will be replaced with the p value of the current iteration's t-test
+  p_values[i] <- results$p
+}
+
+# summarize individual analysis results across iterations to find stimulation results
+mean(p_values < .05)
+
+```
+
+Let's remind ourselves what the above simulation does.
+
+- Data generating process (i.e., population effect): true effect Cohen's d = 0.50 (i.e., difference in means = 0.50, both SDs = 1), with 50 participants per condition.
+- Data analysis: independent t-test p value.
+- Iterations: 100
+- Summary across iterations: For 50 participants per condition, when the true population effect exists (is non zero, i.e., Cohen's d = .50), an independent t-test produces statistically significant p values in `r round(mean(p_values < .05)*100, 1)`% of cases. This is the definition of statistical power: the proportion of cases where effects that do exist are detected (i.e., true-positive results). 
+
+# More complex simulations via for loop
+
+*Note that in the below simulation the results are more complex than covered in the main lesson, so don't worry too much about how the summarize-across-iterations bit works right now. The point is to illustrate that using for loops means writing simulations in a non-linear fashion, and having to keep track of what iterators are being used, how data is being saved, and what data or results cannot be viewed later due to being discarded due to variable scoping.*
+
+The above code isn't enough because we want our simulation to be an experiment with multiple between-conditions. How might we accomplish this?
+
+We could extend the method above, but it gets tricky very quickly.
+
+For example, if I wanted to see how changing the number of participants in (a) the control condition and (b) the intervention condition so that either can be anywhere between 50 and 250 (in steps of 50), including having different number between them (e.g., control = 200, intervention = 100), then I'll have to either:
+
+- Repeat my code a lot. This is always a bad idea. Repeating simple tasks we're bad at doing ourselves is the reason we invented computers.
+- Abstract the code further in some way, such as using more for-loops.
+
+Before you look at this code, know that it much harder to understand and much harder to write too. I'm showing you this method so that you know it exists and is the most basic way of doing it - not because we are going to do it in any of the rest of this course.
+
+```{r}
+
+set.seed(42)
+
+# define the number of iterations
+iterations <- 100
+n_control_conditions <- seq(from = 50, to = 250, by = 50)
+n_intervention_conditions <- seq(from = 50, to = 250, by = 50)
+
+# initialize results list
+simulation_results <- list()
+
+# counter for appending results
+result_counter <- 1
+
+# use nested for loops to iterate over conditions
+for(k in n_intervention_conditions){ # for each of the 'k'-th members of the n_intervention_conditions vector ... 
+  for(j in n_control_conditions){ # ... and for each of the 'j'-th members of the n_control_conditions vector ...
+    for(i in 1:iterations){ # ... and for each value of 'i' in the sequence 1 to iterations, run the following code with those values of i, j, and k:
+      
+      # generate data
+      generated_data <- generate_data(n_control = j,  # current value of j
+                                      n_intervention = k,  # current value of k
+                                      mean_control = 0,
+                                      mean_intervention = 0.5,
+                                      sd_control = 1,
+                                      sd_intervention = 1)
+      
+      # analyse data
+      results <- analyze(generated_data)
+      
+      # save results for this iteration as the 'result_counter'-th member of the simulation_results list
+      simulation_results[[result_counter]] <- list(
+        n_control = j, # current value of j
+        n_intervention = k, # current value of k
+        p_value = results$p  # current value the t test's p value
+      )
+      
+      # increment the iteration counter
+      result_counter <- result_counter + 1
+    }
+  }
+}
+
+# convert the list-of-lists into a data frame, as its easier to wrangle and plot
+simulation_results_df <- bind_rows(simulation_results)
+
+# summarize individual analysis results across iterations to find stimulation results
+# ie plot as a bar plot
+simulation_results_df |>
+  mutate(n_control = as.factor(n_control),
+         n_intervention = as.factor(n_intervention)) |>
+  group_by(n_control, n_intervention) |>
+  summarize(power = mean(p_value < .05), .groups = "drop") |>
+  ggplot(aes(n_control, power, fill = n_intervention)) +
+  geom_col(position = position_dodge(width = 0.4), width = 0.4) +
+  scale_fill_viridis_d(option = "mako", begin = 0.3, end = 0.8, 
+                       guide = guide_legend(reverse = TRUE)) +
+  theme_linedraw() +
+  ggtitle("All conditions") +
+  ylab("Estimated statistical power")
+
+```
+
+# Session info
+
+```{r}
+
+sessionInfo()
+
+```
+
+
