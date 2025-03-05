@@ -11,6 +11,8 @@ output:
     toc_float: yes
 ---
 
+TODO ADD DANCE OF THE P VALUES
+
 # Overview of lesson
 
 In a previous lesson, we briefly talked about the "dance of the p-values". Because p values are uniformly distributed under the null hypothesis, when the true effect is null, p values between studies will dance back and forth between all possible values with equal probability (from 0 to 1). 
