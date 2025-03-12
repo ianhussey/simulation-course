@@ -331,6 +331,7 @@ results_alternative <-
     generate_data(n_per_condition = 50, mean_control = 0, mean_intervention = 0.5, sd = 1) |> analyze()
   )
 
+# plots
 ggplot(results_null, aes(p)) +
   geom_histogram() +
   ggtitle("Distribution of p values under the null hypothesis\n(Population Cohen's d = 0.0)")
@@ -338,6 +339,11 @@ ggplot(results_null, aes(p)) +
 ggplot(results_alternative, aes(p)) +
   geom_histogram() +
   ggtitle("Distribution of p values under the alternative hypothesis\n(Population Cohen's d = 0.5)")
+
+# proportion of significant p values
+mean(results_null$p <.05)
+
+mean(results_alternative$p <.05)
 
 ```
 
@@ -347,6 +353,8 @@ ggplot(results_alternative, aes(p)) +
 ## Part 1 of the solution: {tidyr}'s `expand_grid()`
 
 `expand_grid()` is extremely useful because it creates all possible permutations of all variables you provide it with. 
+
+It is used to create the set of all conditions and iterations you want to simulate using your data generation and analysis functions. For the moment, we will only create the conditions and iterations.
 
 ```{r}
 
@@ -366,7 +374,6 @@ iterations <- seq(from = 1, to = 100, by = 1)
 
 # check
 iterations
-
 # add these iterations to the expand_grid() call
 grid <- expand_grid(
   time_point = c("pre", "post"),
@@ -401,11 +408,12 @@ With:
 - n per condition = 50
 - mean control of 0
 - mean intervention of 0.5
-- SD of 0
+- SD of 1
 
 #### Try it yourself first
 
 ```{r eval=FALSE, include=FALSE}
+
 
 
 ```
@@ -433,6 +441,7 @@ Modify the `expand_grid()` so that it can be used to simulate not only mean_inte
 ```{r eval=FALSE, include=FALSE}
 
 
+
 ```
 
 #### Solution
@@ -448,6 +457,8 @@ experiment_parameters <- expand_grid(
 ) 
 
 ```
+
+- Note that `expand_grid()` effectively creates a full-factorial simulation, following Siepe et al.'s (2024) definition.
 
 ## Part 2 of the solution: {purrr}'s `pmap()`
 
@@ -669,7 +680,7 @@ simulation_summary <- simulation |>
   group_by(population_effect_size) |>
   # ... calculate proportion of iterations where significant results were found
   mutate(significant = p < .05) |>
-  summarize(power = mean(significant))
+  summarize(proportion_of_significant_p_values = mean(significant))
 
 # table of results
 simulation_summary |>
@@ -677,7 +688,7 @@ simulation_summary |>
   kable_classic(full_width = FALSE)
 
 # plot results
-ggplot(simulation_summary, aes(population_effect_size, power)) +
+ggplot(simulation_summary, aes(population_effect_size, proportion_of_significant_p_values)) +
   geom_col() +
   theme_linedraw() +
   scale_y_continuous(breaks = breaks_pretty(n = 10),
@@ -733,14 +744,6 @@ simulation |>
   ggtitle("Distribution of p values under the alternative hypothesis")
 
 ```
-
-# Homework / assignment
-
-1. Write a modified version of the above simulation to also extract the estimate of Cohen's *d*. Rewrite the code to summarize the results across the iterations to do parameter recovery on Cohen's *d*: what is the observed mean Cohen's *d* in each condition? 
-
-2. Write a separate modified version of the original simulation above which, instead of experimentally manipulating the population Cohen's *d* between conditions, instead always uses a Cohen's *d* of 0.5. Instead, manipulate the number of participants per condition. What is the statistical power for population Cohen's *d* = 0.5 for 25, 50, 75, and 100 participants per condition? Rewrite the code to summarize the results across the iterations to summarize these results. Return a table/or plot of the results, ideally both.
-
-Note that both of the above simulation assignments are what Siepe et al. (2024) refer to as one-at-a-time simulations. Other forms of simulations are more complex to summarize the results of. We will come to them in future weeks.
 
 # Session info
 
