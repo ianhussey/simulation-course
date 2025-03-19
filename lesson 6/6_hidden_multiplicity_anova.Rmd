@@ -4,12 +4,18 @@ author: "Ian Hussey"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
   html_document:
+        code_download: true
     code_folding: hide
     highlight: haddock
     theme: flatly
     toc: yes
     toc_float: yes
 ---
+
+# To add
+
+- Introduction to sim_design
+- Simple example of a 2x2 anova
 
 # TODO
 
@@ -81,18 +87,16 @@ analyse_data <- function(data, ivs) {
   # define contrasts option so it doesn't print message on every iteration
   options(contrasts = c("contr.sum", "contr.poly"))
   
-  fit <- afex::aov_ez(
-    id = "id", 
-    dv = "y", 
-    between = generate_c_string(ivs), 
-    data = data,
-    anova_table = "pes"
-  )
+  fit <- afex::aov_ez(id = "id", 
+                      dv = "y", 
+                      between = generate_c_string(ivs), 
+                      data = data,
+                      anova_table = "pes")
   
   results <- fit$anova_table |>
     rownames_to_column(var = "parameter") |>
     rename(p = `Pr(>F)`,
-           partia_eta_2 = pes,
+           partial_eta_2 = pes,
            num_df = `num Df`,
            den_df = `den Df`)
 
@@ -110,7 +114,7 @@ experiment_parameters_grid <- expand_grid(
   ivs = 4,
   mu = 0,
   sd = 1, 
-  iteration = 1:10
+  iteration = 1:1000
 )
 
 # run simulation ----
