@@ -504,7 +504,7 @@ simulation_summary |>
 - If we want to understand why violating the assumption of normality might be bad, what else can we do?
 
 
-# 3. Impact of non-normality on the t-test's false-positive and true-positive (power) rates amd estimates of Cohens's d
+# 3. Impact of non-normality on the t-test's false-positive and true-positive (power) rates and estimates of Cohens's d
 
 As well as the false-positive and false-negative rate of the t-test's *p*-values, we could also examine the estimates of standardized effect size. 
 
