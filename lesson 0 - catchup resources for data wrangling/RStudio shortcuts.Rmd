@@ -1,0 +1,17 @@
+**RStudio shortcuts**
+
+Windows
+
+- Insert Chunk -> Ctrl + Alt + I
+- Insert Pipe -> shift + Ctrl + M
+- Multi - Line writing -> Alt + Mouse 
+- Fix Indentation -> Select Text + Ctrl + I
+- \# - multiple Lines -> Shift + Ctrl + C
+
+Mac
+
+- Insert Chunk -> Cmd + Alt + I
+- Insert Pipe -> shift + Cmd + M
+- Multi - Line writing -> Alt + Mouse
+- Fix Indentation -> Select Text + Cmd + I
+- \# - multiple Lines -> Shift + Cmd + C
