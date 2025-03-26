@@ -1,0 +1,65 @@
+---
+title: "Comparing original and replication effect sizes"
+author: "Ian Hussey"
+output:
+  html_document:
+    code_folding: hide
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+Data from Hardwicke et al. (2021) "Citation Patterns Following a Strongly Contradictory Replication Result: Four Case Studies From Psychology" [https://doi.org/10.1177/25152459211040837](https://doi.org/10.1177/25152459211040837)
+
+```{r include=FALSE}
+
+# formatting options
+# set default chunk options
+knitr::opts_chunk$set(message = FALSE, 
+                      warning = FALSE)
+
+# disable scientific notation
+options(scipen = 999) 
+
+```
+
+```{r fig.height=3, fig.width=7}
+
+library(tidyverse)
+library(ggstance)
+library(readxl)
+library(scales)
+library(knitr)
+library(kableExtra)
+
+dat <- read_xlsx("effect sizes original vs replication.xlsx") |>
+  mutate(Study = fct_relevel(Study, "Replication", "Original"))
+
+ggplot(dat, aes(es, label, color = Study)) +
+  geom_vline(xintercept = 0, linetype = "dotted") +
+  geom_linerangeh(aes(xmin = ci_lower, xmax = ci_upper), position = position_dodge(width = .3)) +
+  geom_point(position = position_dodge(width = .3)) +
+  scale_x_continuous(breaks = breaks_pretty(n = 10),
+                     limits = c(-.2, 3),
+                     name = "Effect size") +
+  theme_linedraw() +
+  scale_color_viridis_d(begin = 0.2, end = 0.6, direction = -1,
+                        guide = guide_legend(reverse = TRUE)) +
+  scale_shape_manual(values = c("Consistent" = 16, "Indeterminable" = 1, "Inconsistent" = 4, "Duplicate" = 3)) +
+  ylab("") +
+  annotate("text", x = 3, y = "Ego depetion (Baumeister et al., 1998)", label = "*", size = 6)
+
+dat |>
+  arrange(label, Study) |>
+  mutate(diff_significant = ifelse(Study == "Replication", lag(ci_lower) > ci_upper, NA)) |>
+  tidyr::fill(citations_original, .direction = "down") |>
+  select(label, citations_original, diff_significant) |>
+  drop_na() |>
+  arrange(diff_significant) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+- NB some studies effect sizes are standardized (cohens d) and some are unstandardized (mean difference)
