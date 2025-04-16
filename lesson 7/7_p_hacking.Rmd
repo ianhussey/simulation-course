@@ -715,9 +715,9 @@ How does the false positive rate change when the outcome measures are correlated
 Would this problem be solved/improved if the authors reported the results of all outcome variables, not just the ones that 'worked'?
 
 
-## Solution
+## Answer
 
-No - read about conjunctive vs disjunctive inferences.
+No - read about conjunctive vs disjunctive inferences [REF].
 
 ## Exercise: extend the simulation
 
