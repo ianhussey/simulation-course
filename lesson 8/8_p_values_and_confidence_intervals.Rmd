@@ -172,12 +172,47 @@ simulation |>
                      #limits = c(0,1),
                      name = "Cohen's d") +
   theme_linedraw() +
-  scale_color_viridis_d(begin = 0.3, end = 0.7) +
+  scale_color_viridis_d(begin = 0.3, end = 0.7, direction = -1) +
   ggtitle("Population Cohen's d = 0.5")
 
 ```
 
 - There is clearly a cut-off value for each sample size that determines when a Cohen's d value is associated with a significant vs. non-significant t-test p-value. What determines this cut-off? Do you have an intuition for it?
+
+## Average effect size for significant effects
+
+Quick aside: Significant results are more likely to be published than non significant ones. If we only look at the significant results, what is the average effect size by N?
+
+Plot only the significant effect sizes, and add their means.
+
+```{r fig.height=5, fig.width=6}
+
+# wrangle
+simulation |>
+  unnest(results) |>
+  mutate(significant = p < .05) |>
+  filter(significant) |>
+  # plot
+  ggplot(aes(n_per_condition*2, cohens_d, color = significant)) +
+  geom_jitter(alpha = 0.25) +
+  # add mean points 
+  stat_summary(fun = "mean",
+               geom = "point",
+               size = 3,
+               color = "#35608DFF") +
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  scale_x_continuous(breaks = breaks_pretty(n = 10),
+                     name = "Total N") +
+  scale_y_continuous(breaks = breaks_pretty(n = 10),
+                     #limits = c(0,1),
+                     name = "Cohen's d") +
+  theme_linedraw() +
+  scale_color_viridis_d(begin = 0.3, end = 0.7, direction = -1) +
+  ggtitle("Population Cohen's d = 0.5")
+
+```
+
+- Back to the q: There is clearly a cut-off value for each sample size that determines when a Cohen's d value is associated with a significant vs. non-significant t-test p-value. What determines this cut-off? Do you have an intuition for it?
 
 # Cohen's d and its 95% CIs 
 
@@ -195,12 +230,14 @@ Re-run the chunk to select new random values. Notice how the magnitude of the Co
 simulation |>
   unnest(results) |>
   mutate(significant = p < .05) |>
+  # randomly sample 1 effects size per sample size
   group_by(n_per_condition) |>
   slice_sample(n = 1) |>
   ungroup() |>
   # plot
   ggplot(aes(n_per_condition*2, cohens_d, color = significant)) +
   geom_point() +
+  # 95% CIs
   geom_linerange(aes(ymin = cohens_d_ci_lower, ymax = cohens_d_ci_upper)) +
   geom_hline(yintercept = 0, linetype = "dotted") +
   scale_x_continuous(breaks = breaks_pretty(n = 10),
@@ -213,6 +250,8 @@ simulation |>
   ggtitle("Population Cohen's d = 0.5\nOne randomly selected dataset per sample size")
 
 ```
+
+- Significant when 95% CI excludes zero effect size
 
 ## All datasets
 
@@ -277,7 +316,7 @@ simulation |>
 - Notice the relationship between 95% CI and p value significance.
 - A certain percentage of Cohen's ds are green vs. blue. What is this percentage also called? What statistical property?
 
-# Mean Cohen's d by sample size
+# Mean Cohen's d and mean interval width by sample size
 
 Now let's average over the Cohen's ds in each condition to find the mean Cohen's d and its mean 95% CIs.
 
@@ -328,6 +367,20 @@ p2 <- ggplot(simulation_summary, aes(n_per_condition*2, proportion_significant))
   theme_linedraw() 
 
 p1 + p2 + plot_layout(ncol = 1)
+
+```
+
+# Exercise: Power for equivalence test
+
+See Lakens et al., 2018 for a tutorial on the concepts below.
+
+Using a Smallest Effect Size of Interest (SESOI) of Cohen's d = 0.2, what is the power of a Two One-Sided Equivalence Test (TOST) for different sample sizes? What N is needed for 80% power to detect a true null effect size as equivalent to zero?
+
+Note: because reasons, use the 90% Confidence Interval instead of 95 (see Lakens et al., 2018).
+
+```{r}
+
+knitr::include_graphics("materials/lakens et al 2018 figure 1.png")
 
 ```
 
