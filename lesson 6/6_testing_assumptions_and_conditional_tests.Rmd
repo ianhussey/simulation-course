@@ -67,6 +67,8 @@ options(scipen = 999)
 
 ```
 
+# Dependencies
+
 ```{r}
 
 # dependencies
@@ -456,24 +458,32 @@ simulation_summary <- simulation_normality |>
 ggplot(simulation_summary, aes(n*2, proportion_significant_conditional, color = skew)) +
   geom_hline(yintercept = 0.80, linetype = "dotted") +
   geom_hline(yintercept = 0.05, linetype = "dotted") +
-  geom_point() +
   geom_line() +
+  geom_point() +
   scale_x_continuous(breaks = breaks_pretty(n = 9), name = "Total sample size") +
   scale_y_continuous(limits = c(0, 1), breaks = breaks_pretty(n = 9), name = "Proportion significant results") +
   theme_linedraw() +
   scale_color_viridis_d(begin = 0.2, end = 0.8) +
   ggtitle("Power of conditional Student's t-test vs. Wilcox test for Cohen's d = 0.5")
 
+# ggsave("conditional.png",
+#        width = 7,
+#        height = 4)
+
 ggplot(simulation_summary, aes(n*2, proportion_significant_wilcox, color = skew)) +
   geom_hline(yintercept = 0.80, linetype = "dotted") +
   geom_hline(yintercept = 0.05, linetype = "dotted") +
-  geom_point() +
   geom_line() +
+  geom_point() +
   scale_x_continuous(breaks = breaks_pretty(n = 9), name = "Total sample size") +
   scale_y_continuous(limits = c(0, 1), breaks = breaks_pretty(n = 9), name = "Proportion significant results") +
   theme_linedraw() +
   scale_color_viridis_d(begin = 0.2, end = 0.8) +
   ggtitle("Power of Wilcoxon rank-sum test for Cohen's d = 0.5")
+
+# ggsave("nonparametric.png",
+#        width = 7,
+#        height = 4)
 
 ggplot(simulation_summary, aes(power_diff)) +
   geom_histogram(binwidth = 0.01) +
