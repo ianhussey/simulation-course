@@ -380,7 +380,9 @@ Note: because reasons, use the 90% Confidence Interval instead of 95 (see Lakens
 
 ```{r}
 
-knitr::include_graphics("materials/lakens et al 2018 figure 1.png")
+if(file.exists("materials/lakens et al 2018 figure 1.png")){
+  knitr::include_graphics("materials/lakens et al 2018 figure 1.png")
+}
 
 ```
 
