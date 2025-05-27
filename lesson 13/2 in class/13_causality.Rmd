@@ -1,0 +1,257 @@
+---
+title: "Regression assumes causality"
+author: "Ian Hussey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_download: true
+    code_folding: show
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+# Citation & License
+
+Citation: 
+
+Ian Hussey (2024) Improving your statistical inferences through simulation studies in R. https://github.com/ianhussey/simulation-course
+
+License: 
+
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.en)
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(message = FALSE, 
+                      warning = FALSE)
+
+# disable scientific notation
+options(scipen=999)
+
+```
+
+# Dependencies
+
+```{r}
+
+library(tidyr)
+library(dplyr)
+library(purrr) 
+library(parameters)
+library(lavaan)
+library(semPlot)
+library(knitr)
+library(kableExtra)
+
+```
+
+# Functions
+
+```{r}
+
+generate_data <- function(n, population_model) {
+  
+  data <- lavaan::simulateData(model = population_model, sample.nobs = n) 
+  
+  return(data)
+}
+
+analyse <- function(data, model) {
+  
+  # specify and fit model
+  fit <- sem(model = model, data = data)
+  
+  # extract regression beta estimates 
+  results <- model_parameters(fit, standardize = TRUE) |>
+    filter(To == "Y" & From == "X") |>  # this corresponds to the Y ~ X effect
+    select(beta = Coefficient,
+           ci_lower = CI_low,
+           ci_upper = CI_high,
+           p) 
+  
+  return(results)
+}
+
+plots_causal <- function(model){
+  generate_data(n = 300, population_model = model) %>%
+    sem(model = model, data = .) |>
+    semPaths(whatLabels = "diagram", 
+             layout = layout_matrix, 
+             residuals = FALSE,
+             edge.label.cex = 1.2, 
+             sizeMan = 10)
+}
+
+```
+
+# Does regression assume causality?
+
+## Plots
+
+Simple regression: X causes Y
+
+```{r}
+
+# simple regression
+layout_matrix <- matrix(c( 1,  0,
+                           -1,  0), 
+                        ncol = 2, 
+                        byrow = TRUE)
+
+plots_causal("Y ~ 0.5*X")
+
+```
+
+Simple regression: Y causes X
+
+```{r}
+
+# simple regression
+layout_matrix <- matrix(c(-1,  0,
+                           1,  0), 
+                        ncol = 2, 
+                        byrow = TRUE)
+
+plots_causal("X ~ 0.5*Y")
+
+```
+
+## Run simulation
+
+```{r}
+
+experiment_parameters_grid <- expand_grid(
+  n = 200,
+  population_model = c("Y ~ 0.5*X",
+                       "X ~ 0.5*Y"),
+  analyse_model = "Y ~ X",
+  iteration = 1:1000
+) 
+
+set.seed(42)
+
+simulation <- 
+  # using the experiment parameters...
+  experiment_parameters_grid |>
+  
+  # ...generate data... 
+  mutate(generated_data = pmap(list(n = n,
+                                    population_model = population_model),
+                               generate_data)) |>
+  # ...analyze data 
+  mutate(results = pmap(list(data = generated_data,
+                             model = analyse_model),
+                        analyse))
+
+```
+
+## Summarize results
+
+```{r}
+
+simulation_summary <- simulation |>
+  unnest(results) |>
+  group_by(n,
+           population_model,
+           analyse_model) |>
+  summarize(mean_beta = mean(beta),
+            proportion_signficiant = mean(p < .05))
+
+simulation_summary |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 2) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+# Collider
+
+## Plots
+
+Covariate is a confounder:
+
+```{r}
+
+layout_matrix <- matrix(c( 1,  0,
+                           -1,  0,
+                           0,  1), 
+                        ncol = 2, 
+                        byrow = TRUE)
+
+plots_causal("Y ~ 0.0*X + 0.5*C; X ~ 0.5*C")
+
+```
+
+Confounder is a collider:
+
+```{r}
+
+layout_matrix <- matrix(c( 0,  1,
+                           1,  0,
+                           -1,  0), 
+                        ncol = 2, 
+                        byrow = TRUE)
+
+plots_causal("C ~ 0.5*X + 0.5*Y; Y ~ 0.0*X")
+
+```
+
+## Run simulation
+
+```{r}
+
+experiment_parameters_grid <- expand_grid(
+  n = 200,
+  population_model = c("Y ~ 0.5*X + 0.0*C",
+                       "C ~ 0.5*X + 0.5*Y; Y ~~ 0.0*X"),
+  analyse_model = "Y ~ X + C",
+  iteration = 1:1000
+)
+
+set.seed(42)
+
+simulation <- 
+  # using the experiment parameters...
+  experiment_parameters_grid |>
+  
+  # ...generate data...
+  mutate(generated_data = pmap(list(n = n,
+                                    population_model = population_model),
+                               generate_data)) |>
+  # ...analyze data
+  mutate(results = pmap(list(data = generated_data,
+                             model = analyse_model),
+                        analyse))
+
+```
+
+## Summarize results
+
+```{r}
+
+simulation_summary <- simulation |>
+  unnest(results) |>
+  group_by(n,
+           population_model,
+           analyse_model) |>
+  summarize(mean_beta = mean(beta),
+            proportion_signficiant = mean(p < .05))
+
+simulation_summary |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 2) |>
+  kable() |>
+  kable_classic(full_width = FALSE)
+
+```
+
+# Session info
+
+```{r}
+
+sessionInfo()
+
+```
+
+

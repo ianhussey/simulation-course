@@ -1,0 +1,144 @@
+---
+title: "The impact of one form of lazy/careless responding on the power and false positive rate of a Student's t-test"
+author: "[your name here]"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+# Citation & License
+
+Citation: 
+
+Ian Hussey (2024) Improving your statistical inferences through simulation studies in R. https://github.com/ianhussey/simulation-course
+
+License: 
+
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.en)
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(message = FALSE, 
+                      warning = FALSE)
+
+# disable scientific notation
+options(scipen = 999) 
+
+```
+
+# Assignment
+
+Background/Rationale of the exercise:
+
+Many surveys that use a Likert scale or a slider have a default response. E.g., when you load the page all answers already have a default answer of "0" on a -3 to +3 scale. Careless or lazy responding is common. Some participants simply leave the default answers and click "next" in the survey. Many researchers don't use attention checks in their surveys, or don't use good ones, and these careless or lazy responses are not excluded. This stimulation seeks to quantify the impact of this type of responding on the results. Please note there any many other forms of careless responding - this is just one example and doesn't provide a full answer to this question. 
+
+Exercise:
+
+Write R code from scratch, but using our established workflow, that does the following:
+
+- Data generation function
+  - Simulate two independent groups, control and intervention, drawn from a normal distribution. The mean and SD of both conditions should be variables. 
+- Corrupt data function
+  - You can use the corrupt data function I provide you with below. This replaces a proportion of the whole dataset's 'score' column with a default value (in this case zero). You should use the usual mutate() and pmap() workflow to create a new column, corrupted_data, from an existing column named generated_data.
+- Analyze data function
+  - Fit a Student's t-test and extract the p value in a tidy tibble.
+- An expand grid call using:
+  - n per condition = 100
+  - mean = 0 for the control group
+  - mean = 0 or 0.50 for the intervention group (two scenarios, population effect exists or does not)
+  - SD = 1
+  - proportion of straight line responders = 0 or 0.1
+  - 1000 iterations
+  - using set.seed(42)
+- Summarize across iterations
+  - Summarise the proportion of significant p values in all simulated conditions in a table or plot
+  - Provide a description and interpretation of the results: How does this form of straight line responding affect the false positive rate? How does it affect power? (briefly, in two or three sentences)
+  
+# Dependencies
+
+```{r}
+
+library(tidyverse)
+library(scales)
+library(sn)
+library(janitor)
+library(effsize)
+library(knitr)
+library(kableExtra)
+library(faux)
+
+```
+
+# Generate data function
+
+```{r}
+
+
+
+```
+
+# Contaminate data function
+
+```{r}
+
+contaminate_data <- function(data, proportion_straightline_responder, value = 0) {
+  data %>% 
+    mutate(is_straightline_responder = runif(n()) < proportion_straightline_responder,    # Bernoulli(proportion)
+           score       = if_else(is_straightline_responder, value, score)) %>% 
+    ungroup()
+}
+
+```
+
+# Analyze data function
+
+```{r}
+
+
+
+```
+
+# Simulation parameters
+
+```{r}
+
+
+
+```
+
+# Run simulation
+
+```{r}
+
+set.seed(42)
+
+
+
+```
+
+# Summarize results across iterations
+
+```{r}
+
+
+
+```
+
+[written description and interpretation of results here]
+
+*Remember that this is just one narrow simulation of the impact of one type of lazy/careless responding on one type of analysis - other forms and other analyses can be affected very differently.* 
+
+# Session info
+
+```{r}
+
+sessionInfo()
+
+```
+
+
