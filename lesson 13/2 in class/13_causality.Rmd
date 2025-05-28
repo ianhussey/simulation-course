@@ -62,9 +62,10 @@ analyse <- function(data, model) {
   
   # specify and fit model
   fit <- sem(model = model, data = data)
+  #fit <- lm(formula = mode, data = data)
   
   # extract regression beta estimates 
-  results <- model_parameters(fit, standardize = TRUE) |>
+  results <- parameters::model_parameters(fit, standardize = FALSE) |>
     filter(To == "Y" & From == "X") |>  # this corresponds to the Y ~ X effect
     select(beta = Coefficient,
            ci_lower = CI_low,
@@ -74,7 +75,7 @@ analyse <- function(data, model) {
   return(results)
 }
 
-plots_causal <- function(model){
+ plots_causal <- function(model){
   generate_data(n = 300, population_model = model) %>%
     sem(model = model, data = .) |>
     semPaths(whatLabels = "diagram", 
