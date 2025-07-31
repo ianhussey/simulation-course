@@ -24,7 +24,7 @@ Please read Siepe et al. (2024) "Simulation Studies for Methodological Research 
 
 ### Assignment submission format
 
-You must submit your assignment as a *single RMarkdown* (.Rmd - not the .html) file via Ilias by July 7th 2024 at 23:59. 
+You must submit your assignment as a *single RMarkdown* (.Rmd - not the .html) file via Ilias by August 17th 2024 at 23:59. 
 
 In future, I will probably require students to use GitHub for weekly and end of seminar assignments, but I want to keep it simple here as we had problems with GitHub last semester.
 
