@@ -530,7 +530,17 @@ Remember, however, that (a) our values for the prior probability that (non)signi
 
 How would we simulate at two levels, studies and also meta-analyses of them?
 
-How could we assess the power of a method like Egger's test for funnel plot asymmetry, as implemented by `r regtest(res, model = "lm")`?
+How could we assess the power of a method like Egger's test for funnel plot asymmetry, as implemented by `regtest(res, model = "lm")`?
+
+
+below needs work:
+
+# Error in `mutate()`:
+# ℹ In argument: `analysis_meta = future_pmap(...)`.
+# Caused by error:
+# ℹ In index: 384.
+# Caused by error in `rma()`:
+# ! Fisher scoring algorithm did not converge. See 'help(rma)' for possible remedies.
 
 ```{r}
 
@@ -538,14 +548,17 @@ How could we assess the power of a method like Egger's test for funnel plot asym
 #rm(list = ls())
 
 
+# run furrr:::future_map in parallel
+plan(multisession)
+
 # dependencies ----
-# repeated here for the sake of completeness 
+# repeated here for the sake of completeness
 
 library(tidyr)
 library(dplyr)
 library(tibble)
 library(forcats)
-library(purrr) 
+library(purrr)
 library(ggplot2)
 library(knitr)
 library(kableExtra)
@@ -559,45 +572,45 @@ generate_data <- function(n_min,
                           mean_intervention,
                           sd_control,
                           sd_intervention) {
-  
-  
+
+
   n_per_condition <- runif(n = 1, min = n_min, max = n_max)
-  
-  data_control <- 
+
+  data_control <-
     tibble(condition = "control",
            score = rnorm(n = n_per_condition, mean = mean_control, sd = sd_control))
-  
-  data_intervention <- 
+
+  data_intervention <-
     tibble(condition = "intervention",
            score = rnorm(n = n_per_condition, mean = mean_intervention, sd = sd_intervention))
-  
+
   data <- bind_rows(data_control,
                     data_intervention) |>
     # control's factor levels must be ordered so that intervention is the first level and control is the second
     # this ensures that positive cohen's d values refer to intervention > control and not the other way around.
     mutate(condition = fct_relevel(condition, "intervention", "control"))
-  
+
   return(data)
 }
 
 
 # define data analysis function ----
 analyse_study <- function(data, probability_sig_published, probability_nonsig_published) {
-  
+
   res_n <- data |>
     count()
-  
-  res_t_test <- t.test(formula = score ~ condition, 
+
+  res_t_test <- t.test(formula = score ~ condition,
                        data = data,
                        var.equal = FALSE,
                        alternative = "two.sided")
-  
+
   res_cohens_d <- effsize::cohen.d(formula = score ~ condition,  # new addition: also fit cohen's d
                                    within = FALSE,
                                    data = data)
-  
+
   res <- tibble(total_n = res_n$n,
-                p = res_t_test$p.value, 
+                p = res_t_test$p.value,
                 cohens_d_estimate = res_cohens_d$estimate,  # new addition: save cohen's d and its 95% CIs to the results tibble
                 cohens_d_ci_lower = res_cohens_d$conf.int["lower"],
                 cohens_d_ci_upper = res_cohens_d$conf.int["upper"]) |>
@@ -614,25 +627,25 @@ analyse_study <- function(data, probability_sig_published, probability_nonsig_pu
       published = ifelse((significant & luck >= (1 - probability_sig_published)) |
                            (!significant & luck >= (1 - probability_nonsig_published)), TRUE, FALSE)
     )
-  
+
   return(res)
 }
 
 analyse_meta <- function(data){
-  
-  data_for_meta <- data |> 
+
+  data_for_meta <- data |>
     filter(published == TRUE)
-  
+
   if(nrow(data_for_meta) > 0){
-    fit_meta <- 
-      rma(yi     = cohens_d_estimate, 
-          vi     = cohens_d_variance, 
+    fit_meta <-
+      rma(yi     = cohens_d_estimate,
+          vi     = cohens_d_variance,
           data   = data_for_meta,
           method = "REML")
   } else {
     fit_meta <- NULL
   }
-  
+
   return(fit_meta)
 }
 
@@ -653,11 +666,11 @@ analyse_meta_publication_bias <- function(fit_meta) {
     },
     otherwise = tibble(egger_p = NA_real_, egger_corrected_es = NA_real_)
   )
-  
+
   if (is.null(fit_meta)) {
     return(tibble(egger_p = NA_real_, egger_corrected_es = NA_real_))
   }
-  
+
   safe_regtest(fit_meta)
 }
 
@@ -668,7 +681,7 @@ experiment_parameters_grid <- bind_rows(
     n_min = 10,
     n_max = 100,
     mean_control = 0,
-    mean_intervention = c(0, 0.2, 0.5, 0.8),  
+    mean_intervention = c(0, 0.2, 0.5, 0.8),
     sd_control = 1,
     sd_intervention = 1,
     probability_sig_published = 0.70, # 0.61 from Franco et al 2014, 2016
@@ -681,7 +694,7 @@ experiment_parameters_grid <- bind_rows(
     n_min = 10,
     n_max = 100,
     mean_control = 0,
-    mean_intervention = c(0, 0.2, 0.5, 0.8),  
+    mean_intervention = c(0, 0.2, 0.5, 0.8),
     sd_control = 1,
     sd_intervention = 1,
     probability_sig_published = 0.70, # 0.61 from Franco et al 2014, 2016
@@ -694,7 +707,7 @@ experiment_parameters_grid <- bind_rows(
     n_min = 10,
     n_max = 100,
     mean_control = 0,
-    mean_intervention = c(0, 0.2, 0.5, 0.8),  
+    mean_intervention = c(0, 0.2, 0.5, 0.8),
     sd_control = 1,
     sd_intervention = 1,
     probability_sig_published = 0.70, # 0.61 from Franco et al 2014, 2016
@@ -706,34 +719,38 @@ experiment_parameters_grid <- bind_rows(
 )
 
 if(file.exists("simulation_summary.rds")) {
-  simulation_summary <- read_rds("simulation_summary.rds")
+  simulation_summary <- read_rds("../data/simulation_summary_12.rds")
 } else {
-  
+
   # set the seed ----
   # for the pseudo random number generator to make results reproducible
   set.seed(46)
-  
+
   # run study level simulation ----
-  simulation_studies <- 
+  simulation_studies <-
     # using the experiment parameters
     experiment_parameters_grid |>
-    
+
     # generate data using the data generating function and the parameters relevant to data generation
-    mutate(generated_data = pmap(list(n_min = n_min,
-                                      n_max = n_max,
-                                      mean_control = mean_control,
-                                      mean_intervention = mean_intervention,
-                                      sd_control = sd_control,
-                                      sd_intervention = sd_intervention),
-                                 generate_data)) |>
-    
+    mutate(generated_data = future_pmap(list(n_min = n_min,
+                                             n_max = n_max,
+                                             mean_control = mean_control,
+                                             mean_intervention = mean_intervention,
+                                             sd_control = sd_control,
+                                             sd_intervention = sd_intervention),
+                                        generate_data,
+                                        .progress = TRUE,
+                                        .options = furrr_options(seed = TRUE))) |>
+
     # apply the analysis function to the generated data using the parameters relevant to analysis
-    mutate(analysis_results_study = pmap(list(data = generated_data,
-                                              probability_sig_published = probability_sig_published,
-                                              probability_nonsig_published = probability_nonsig_published),
-                                         analyse_study))
-  
-  
+    mutate(analysis_results_study = future_pmap(list(data = generated_data,
+                                                     probability_sig_published = probability_sig_published,
+                                                     probability_nonsig_published = probability_nonsig_published),
+                                                analyse_study,
+                                                .progress = TRUE,
+                                                .options = furrr_options(seed = TRUE)))
+
+
   # run meta-analysis simulation ----
   simulation_meta <- simulation_studies |>
     unnest(analysis_results_study) |>
@@ -742,26 +759,34 @@ if(file.exists("simulation_summary.rds")) {
     nest(.key = "meta_data") |>
     ungroup() |>
     # at this point we have the equivalent of the usual steps up to and including generate data. next analyze that data
-    mutate(analysis_meta = pmap(list(data = meta_data),
-                                analyse_meta)) |>
+    mutate(analysis_meta = future_pmap(list(data = meta_data),
+                                       analyse_meta,
+                                       .progress = TRUE,
+                                       .options = furrr_options(seed = TRUE))) |>
     # extract meta ES
-    mutate(meta_es = pmap(list(fit_meta = analysis_meta),
-                          results_meta)) |>
+    mutate(meta_es = future_pmap(list(fit_meta = analysis_meta),
+                                 results_meta,
+                                 .progress = TRUE,
+                                 .options = furrr_options(seed = TRUE)),
+           .progress = TRUE,
+           seed = TRUE) |>
     unnest(meta_es) |>
     # run eggers test
-    mutate(analysis_meta_publication_bias = pmap(list(fit_meta = analysis_meta),
-                                                 analyse_meta_publication_bias))
-  
+    mutate(analysis_meta_publication_bias = future_pmap(list(fit_meta = analysis_meta),
+                                                        analyse_meta_publication_bias,
+                                                        .progress = TRUE,
+                                                        .options = furrr_options(seed = TRUE)))
+
   # summarize across meta iterations
   simulation_summary <- simulation_meta |>
     unnest(analysis_meta_publication_bias) |>
     rename(population_es = mean_intervention) |>
     group_by(population_es, probability_sig_published, probability_nonsig_published, k_studies) |>
-    summarize(mean_meta_es = mean(meta_es), 
+    summarize(mean_meta_es = mean(meta_es),
               egger_proportion_significant = mean(egger_p < .05, na.rm = TRUE),
               mean_egger_corrected_es = mean(egger_corrected_es, na.rm = TRUE))
-  
-  write_rds(simulation_summary, "simulation_summary.rds")
+
+  write_rds(simulation_summary, "../data/simulation_summary_12.rds")
 }
 
 # print table
@@ -769,6 +794,8 @@ simulation_summary |>
   mutate_if(is.numeric, round_half_up, digits = 2) |>
   kable() |>
   kable_classic(full_width = FALSE)
+
+
 
 ```
 
